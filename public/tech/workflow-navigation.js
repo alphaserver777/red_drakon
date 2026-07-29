@@ -21,6 +21,11 @@
         return diagrams().find((diagram) => diagram.id === query || diagram.name === query) || null;
     }
 
+    window.drakonWorkflowName = function (id) {
+        const target = resolve(id);
+        return target ? target.name : String(id || "следующая схема");
+    };
+
     window.drakonWorkflowChooseTarget = function (current, onChosen) {
         const list = diagrams();
         if (!list.length) return;

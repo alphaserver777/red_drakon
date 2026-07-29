@@ -10431,7 +10431,12 @@ function setTeleport(node) {
         var edits
         if (!target) return
         edits = []
-        updateItem(edits, itemId, {teleport: target})
+        var fields = {teleport: target}
+        // Телепорт принадлежит выходной ветке, а не рабочему действию.
+        if (item.type == "branch" && window.drakonWorkflowName) {
+            fields.content = "→ " + window.drakonWorkflowName(target)
+        }
+        updateItem(edits, itemId, fields)
         editAndSave(edits)
     })
 }
