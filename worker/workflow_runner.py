@@ -142,11 +142,16 @@ def approved_tag(repo, sha):
 
 
 def route_snapshot():
-    result = subprocess.run(["ip", "-j", "route", "show", "dev", "ppp0"], text=True, capture_output=True, check=True)
-    routes = json.loads(result.stdout)
-    networks = [item.get("dst") for item in routes if item.get("dst") and item.get("dst") != "default"]
+    networks = []
+    for _ in range(20):
+        result = subprocess.run(["ip", "-j", "route", "show", "dev", "ppp0"], text=True, capture_output=True, check=True)
+        routes = json.loads(result.stdout)
+        networks = [item.get("dst") for item in routes if item.get("dst") and item.get("dst") != "default"]
+        if networks:
+            break
+        time.sleep(1)
     if not networks:
-        raise ValueError("У ppp0 нет CIDR-маршрутов")
+        raise ValueError("У ppp0 нет CIDR-маршрутов после ожидания маршрутизации")
     oversized = [network for network in networks if int(network.rsplit("/", 1)[1]) < 16]
     if oversized:
         raise ValueError(f"Маршруты крупнее /16 требуют отдельного разрешения: {', '.join(oversized)}")
@@ -197,6 +202,27 @@ def vpn_down():
     script = Path("/root/agent_api/vpn-connect.sh")
     if script.is_file():
         subprocess.run([str(script), "down"], text=True, capture_output=True, check=True)
+
+
+def ensure_claimed_task(task_id):
+    """Свободный воркер занимает первую совместимую задачу из очереди."""
+    pc_api = Path("/root/agent_api/pc_api.py")
+    if not pc_api.is_file():
+        raise FileNotFoundError("Не найден /root/agent_api/pc_api.py")
+    current = subprocess.run([str(pc_api), "task-env"], text=True, capture_output=True, check=False)
+    if current.returncode == 0:
+        task = json.loads(current.stdout)
+        if task.get("taskId") != task_id:
+            raise RuntimeError(f"Воркер уже занят задачей {task.get('taskId')}, а не {task_id}")
+        return {"status": "already-claimed", "taskId": task_id}
+    claimed = subprocess.run([str(pc_api), "task-claim-next"], text=True, capture_output=True, check=True)
+    task = json.loads(claimed.stdout)
+    claimed_id = task.get("id")
+    if claimed_id != task_id:
+        subprocess.run([str(pc_api), "task-release", str(claimed_id), "--reason",
+                        "workflow SHA ожидает другую задачу"], check=False, capture_output=True, text=True)
+        raise RuntimeError(f"Первая совместимая задача — {claimed_id}, а не {task_id}")
+    return {"status": "claimed-from-queue", "taskId": task_id}
 
 
 def discovery(routes, artifact):
@@ -307,11 +333,24 @@ def main():
         journal.add("4", {"status": "blocked", "reason": "Нужен --execute; сетевые действия не запускались"})
         print(json.dumps({"status": "blocked", "journal": str(output), "sha": resolved, "tag": tag}, ensure_ascii=False))
         return 2
-    journal.add("5", vpn_up(args.task_id))
-    journal.add("6", {"status": "ppp0-present"})
-    snapshot = route_snapshot()
-    journal.add("7", snapshot)
-    journal.add("8", {"status": "routes-valid", "routes": snapshot["routes"]})
+    journal.add("4", ensure_claimed_task(args.task_id))
+    vpn_connected = False
+    try:
+        journal.add("5", vpn_up(args.task_id))
+        vpn_connected = True
+        journal.add("6", {"status": "ppp0-present"})
+        snapshot = route_snapshot()
+        journal.add("7", snapshot)
+        journal.add("8", {"status": "routes-valid", "routes": snapshot["routes"]})
+    except Exception as error:
+        journal.add("18", {"status": "blocked", "error": str(error)})
+        if vpn_connected:
+            try:
+                vpn_down()
+                journal.add("cleanup", {"vpn": "disconnected"})
+            except Exception as cleanup_error:
+                journal.add("cleanup", {"vpn": "disconnect-failed", "error": str(cleanup_error)})
+        raise
     journal.add("9", {"status": "checkpoint", "name": "before-discovery", "reason": "Требуется отдельное возобновление реализации discovery"})
     print(json.dumps({"status": "checkpoint", "journal": str(output), "sha": resolved, "tag": tag, "routes": snapshot["routes"]}, ensure_ascii=False))
     return 0
