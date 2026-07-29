@@ -214,6 +214,7 @@ def ensure_claimed_task(task_id):
         task = json.loads(current.stdout)
         if task.get("taskId") != task_id:
             raise RuntimeError(f"Воркер уже занят задачей {task.get('taskId')}, а не {task_id}")
+        subprocess.run([str(pc_api), "task-heartbeat", str(task_id)], check=True, capture_output=True, text=True)
         return {"status": "already-claimed", "taskId": task_id}
     claimed = subprocess.run([str(pc_api), "task-claim-next"], text=True, capture_output=True, check=True)
     task = json.loads(claimed.stdout)
