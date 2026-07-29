@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -92,6 +94,23 @@ class Journal:
                      "events": []}
         self.add("run-created", {"pid": os.getpid()})
 
+    @classmethod
+    def open(cls, path):
+        instance = cls.__new__(cls)
+        instance.path = path
+        instance.data = read_json(path)
+        events = instance.data.get("events")
+        if not isinstance(events, list) or not events:
+            raise ValueError("Журнал не содержит событий")
+        previous = ""
+        for event in events:
+            stored = event.get("hash")
+            bare = {key: value for key, value in event.items() if key != "hash"}
+            if event.get("previous") != previous or stored != digest(bare):
+                raise ValueError("Нарушена хеш-цепочка журнала")
+            previous = stored
+        return instance
+
     def add(self, block, result):
         previous = self.data["events"][-1]["hash"] if self.data["events"] else ""
         event = {"at": int(time.time()), "block": block, "result": result, "previous": previous}
@@ -105,8 +124,18 @@ class Journal:
 
 def git_sha(repo, ref, fetch):
     if fetch:
+        subprocess.run(["git", "-C", str(repo), "fetch", "--tags", "origin"], check=True)
         subprocess.run(["git", "-C", str(repo), "fetch", "origin", ref], check=True)
     return subprocess.check_output(["git", "-C", str(repo), "rev-parse", f"{ref}^{{commit}}"], text=True).strip()
+
+
+def approved_tag(repo, sha):
+    tags = subprocess.check_output(
+        ["git", "-C", str(repo), "tag", "--points-at", sha, "workflow/08-vpn-discovery/v*"], text=True
+    ).splitlines()
+    if not tags:
+        raise ValueError("SHA не утверждён тегом workflow/08-vpn-discovery/vN")
+    return sorted(tags)[-1]
 
 
 def route_snapshot():
@@ -122,6 +151,41 @@ def route_snapshot():
     if "ppp0" in control:
         raise ValueError("Управляющий маршрут ошибочно направлен через ppp0")
     return {"routes": networks, "controlRoute": control}
+
+
+def discovery(routes, artifact):
+    """Единственное активное действие: host discovery в разрешённых CIDR."""
+    reports, live = [], set()
+    for network in routes:
+        command = ["nmap", "-sn", "-n", "--max-rate", "500", "--host-timeout", "300s", network]
+        result = subprocess.run(command, text=True, capture_output=True, check=False)
+        reports.append("$ " + " ".join(command) + "\n" + result.stdout + result.stderr)
+        if result.returncode not in (0, 1):
+            raise RuntimeError(f"nmap завершился с кодом {result.returncode} для {network}")
+        for line in result.stdout.splitlines():
+            if "Nmap scan report for" not in line:
+                continue
+            candidates = re.findall(r"(?:\d{1,3}\.){3}\d{1,3}", line)
+            if candidates:
+                address = ipaddress.ip_address(candidates[-1])
+                if address in ipaddress.ip_network(network, strict=False):
+                    live.add(str(address))
+    artifact.write_text("\n\n".join(reports) + "\n", encoding="utf-8")
+    return sorted(live)
+
+
+def record_hosts(task_id, hosts, artifact):
+    pc_api = Path("/root/agent_api/pc_api.py")
+    if not pc_api.is_file():
+        raise FileNotFoundError("Не найден /root/agent_api/pc_api.py")
+    for host in hosts:
+        subprocess.run([str(pc_api), "host", host], check=True)
+        subprocess.run([
+            str(pc_api), "timeline", host,
+            "--summary", "Обнаружение живого хоста workflow 08",
+            "--command", "nmap -sn -n (см. файл доказательства)",
+            "--result", f"Хост отвечает; доказательство: {artifact.name}", "--status", "success",
+        ], check=True)
 
 
 def dry_result(scenario):
@@ -146,11 +210,36 @@ def main():
     parser.add_argument("--fetch", action="store_true")
     parser.add_argument("--dry-run", choices=["missing-scope", "vpn-failed", "route-failed", "checkpoint", "empty", "live"])
     parser.add_argument("--execute", action="store_true", help="Разрешить только VPN и остановку перед discovery")
+    parser.add_argument("--resume", type=Path, help="Продолжить журнал из before-discovery")
+    parser.add_argument("--approve-discovery", action="store_true", help="Явно разрешить discovery при --resume")
     args = parser.parse_args()
     if args.task_id <= 0:
         parser.error("task ID должен быть положительным")
     resolved = git_sha(args.repo, args.schema_ref, args.fetch)
     _, contract = load_workflow(args.repo, resolved)
+    tag = approved_tag(args.repo, resolved)
+    if args.resume:
+        if args.dry_run or args.execute or not args.approve_discovery:
+            parser.error("Возобновление требует только --resume и --approve-discovery")
+        journal = Journal.open(args.resume)
+        if journal.data.get("taskId") != args.task_id or journal.data.get("resolvedSha") != resolved:
+            raise ValueError("Задача или SHA не совпадают с журналом")
+        last = journal.data["events"][-1]
+        if last.get("block") != "9" or last.get("result", {}).get("name") != "before-discovery":
+            raise ValueError("Журнал не находится в контрольной точке before-discovery")
+        snapshot = route_snapshot()
+        journal.add("10", {"status": "approved", "tag": tag, "routes": snapshot["routes"]})
+        artifact = journal.path.with_suffix(".discovery.txt")
+        hosts = discovery(snapshot["routes"], artifact)
+        journal.add("11", {"status": "completed", "coverage": snapshot["routes"], "evidence": str(artifact), "hosts": hosts})
+        record_hosts(args.task_id, hosts, artifact)
+        status, block = ("live", "13") if hosts else ("empty", "14")
+        journal.add("12", {"status": status, "count": len(hosts)})
+        journal.add(block, {"status": status, "hosts": hosts})
+        journal.add("15", {"status": status, "evidence": str(artifact)})
+        print(json.dumps({"status": status, "journal": str(journal.path), "sha": resolved, "tag": tag,
+                          "coverage": snapshot["routes"], "hosts": hosts}, ensure_ascii=False))
+        return 0
     output = args.output or Path.home() / ".local/state/red_drakon/runs" / f"{int(time.time())}-{args.task_id}.json"
     journal = Journal(output, args.task_id, args.schema_ref, resolved, bool(args.dry_run))
     journal.add("3", {"contract": digest(contract)})
@@ -158,19 +247,21 @@ def main():
         status, blocks = dry_result(args.dry_run)
         for block in blocks[1:]:
             journal.add(block, {"simulated": True})
-        print(json.dumps({"status": status, "journal": str(output), "sha": resolved}, ensure_ascii=False))
+        print(json.dumps({"status": status, "journal": str(output), "sha": resolved, "tag": tag}, ensure_ascii=False))
         return 0 if status in {"live", "empty", "checkpoint"} else 2
     if not args.execute:
         journal.add("4", {"status": "blocked", "reason": "Нужен --execute; сетевые действия не запускались"})
-        print(json.dumps({"status": "blocked", "journal": str(output), "sha": resolved}, ensure_ascii=False))
+        print(json.dumps({"status": "blocked", "journal": str(output), "sha": resolved, "tag": tag}, ensure_ascii=False))
         return 2
     pc_api = Path("/root/agent_api/pc_api.py")
     subprocess.run([str(pc_api), "vpn-up", str(args.task_id)], check=True)
     journal.add("5", {"status": "vpn-up"})
+    journal.add("6", {"status": "ppp0-present"})
     snapshot = route_snapshot()
     journal.add("7", snapshot)
+    journal.add("8", {"status": "routes-valid", "routes": snapshot["routes"]})
     journal.add("9", {"status": "checkpoint", "name": "before-discovery", "reason": "Требуется отдельное возобновление реализации discovery"})
-    print(json.dumps({"status": "checkpoint", "journal": str(output), "sha": resolved, "routes": snapshot["routes"]}, ensure_ascii=False))
+    print(json.dumps({"status": "checkpoint", "journal": str(output), "sha": resolved, "tag": tag, "routes": snapshot["routes"]}, ensure_ascii=False))
     return 0
 
 

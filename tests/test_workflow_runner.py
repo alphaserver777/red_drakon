@@ -16,7 +16,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(diagram["items"]["11"]["type"], "action")
 
     def test_dry_paths_are_complete(self):
-        for scenario, expected in (("live", "live"), ("empty", "empty"), ("checkpoint", "checkpoint"), ("vpn-failed", "dead")):
+        for scenario, expected in (("live", "live"), ("empty", "empty"), ("checkpoint", "checkpoint"),
+                                   ("vpn-failed", "dead"), ("route-failed", "blocked"),
+                                   ("missing-scope", "blocked")):
             status, blocks = RUNNER.dry_result(scenario)
             self.assertEqual(status, expected)
             self.assertEqual(blocks[0], "3")
@@ -27,6 +29,7 @@ class WorkflowTests(unittest.TestCase):
         journal.add("3", {"simulated": True})
         data = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(data["events"][1]["previous"], data["events"][0]["hash"])
+        self.assertEqual(RUNNER.Journal.open(output).data["runId"], data["runId"])
         output.unlink()
 
 

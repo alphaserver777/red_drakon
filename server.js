@@ -95,7 +95,11 @@ function validWorkflowPair(value) {
   const items = value?.diagram?.items;
   const operations = value?.contract?.operations;
   if (!items || !operations || value.contract.workflow !== "08-vpn-discovery") return false;
-  return Object.entries(items).every(([id, item]) => !["action", "question"].includes(item.type) || operations[id]);
+  const forbidden = /credential|парол|port|порт|service|сервис|mitre/i;
+  if (value.contract?.policy?.scope !== "all-ppp0-routes") return false;
+  return Object.entries(items).every(([id, item]) =>
+    (!["action", "question"].includes(item.type) || operations[id]) && !forbidden.test(String(item.content || ""))
+  );
 }
 
 async function applyChange(target, change, save) {
