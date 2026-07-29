@@ -85,7 +85,7 @@ function Address_draw(render, item) {
     // Выходная ветка с переходом рисуется как отдельный конечный значок:
     // та же форма, что у «Конец», но с именем следующей схемы.
     source = module.storage.items[item.itemId]
-    if (source && (source.teleport || source.teleportPending)) {
+    if (source && source.teleport) {
         format = getFormatForIcon("end")
         texId = makeCustomTexture(
             render,
@@ -3085,26 +3085,6 @@ function branchInsert(socket) {
     var branchId
     branchId = getSocketBranchId(socket)
     return branchInsertAt(branchId)
-}
-
-function teleportInsert(socket) {
-    var branchId, edits, fields, items, newId, oldTargets, targetId
-    branchId = getSocketBranchId(socket)
-    edits = moveBranchIdsRight(branchId)
-    targetId = getBranchItemId(branchId)
-    fields = {
-        type : "branch",
-        branchId : branchId,
-        text : "↗ Выбрать схему",
-        one : targetId,
-        teleportPending : true
-    }
-    newId = createItem(edits, fields)
-    items = module.storage.items
-    oldTargets = {}
-    oldTargets[targetId] = true
-    redirectBranch(items, oldTargets, newId, edits)
-    return edits
 }
 
 function branchInsertAt(branchId) {
@@ -8842,7 +8822,6 @@ function initSockets() {
     module.insertActions.question = questionInsert
     module.insertActions["foreach"] = foreachInsert
     module.insertActions.branch = branchInsert
-    module.insertActions.teleport = teleportInsert
 }
 
 function insertFreeItem(x, y, type, subtype) {
@@ -10475,7 +10454,7 @@ function setTeleport(node) {
         var edits
         if (!target) return
         edits = []
-        var fields = {teleport: target, teleportPending: null}
+        var fields = {teleport: target}
         // Телепорт принадлежит выходной ветке, а не рабочему действию.
         if (item.type == "branch" && window.drakonWorkflowName) {
             fields.content = "→ " + window.drakonWorkflowName(target)

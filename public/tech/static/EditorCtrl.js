@@ -2916,7 +2916,7 @@ function EditorCtrl(window, document, elementId, userId) {
       image: "end.png",
       tooltip: "Телепорт в следующую схему",
       command: function () {
-        showSockets("teleport");
+        showSockets("branch");
       },
     };
     var silhouette = {
