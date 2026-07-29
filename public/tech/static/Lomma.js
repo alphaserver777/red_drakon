@@ -13556,7 +13556,7 @@ function showInsertionSockets(type) {
                     showInsert
                 )
             } else {
-                if (type === "branch") {
+                if (type === "branch" || type === "teleport") {
                     showAllBranchSockets(
                         "insert"
                     )
