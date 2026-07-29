@@ -8,6 +8,8 @@
 | DrakonWidget | `stepan-mitkin/drakonwidget` | `daccd7412a80af25100fd950b3e1d073a4b2a8c9` | простой редактор в `public/` |
 | DrakonTech | `stepan-mitkin/drakon.tech.desktop` | `569df8325b9950f39b4f2f2d1fad507cedbcc308` | браузерный интерфейс Desktop в `public/tech/` |
 
-Локальные изменения для серверного хранения находятся только в
-`server.js`, `public/tech/tech-adapter.js`, `public/tech/tech-bootstrap.js` и
-`public/tech/tech-loader.js`.
+Помимо серверного хранения, в локальной версии изменены файлы интерфейса
+`public/tech/` и рендеринга, необходимые для единого редактирования текста
+блока, временной подсветки журнала и автоматической нумерации блоков. Эти
+изменения относятся только к нашему приложению и не являются частью исходных
+проектов Stepan Mitkin.
