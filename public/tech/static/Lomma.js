@@ -6155,18 +6155,35 @@ function isTeleportInsertion(node) {
     return (item) && (item.type == "insertion") && ((item.teleport) || (item.teleportPending))
 }
 
-function isTeleportTail(node) {
-    if ((!node) || (node.type != "end") || (!node.prev) || (node.prev.length != 1)) {
+function isTeleportContinuation(node, visited) {
+    if (isTeleportInsertion(node)) {
+        return true
+    }
+    if ((!node) || (!node.prev) || (node.prev.length != 1)) {
         return false
     }
-    return isTeleportInsertion(node.prev[0])
+    if ((!visited)) {
+        visited = {}
+    }
+    if (node.id in visited) {
+        return false
+    }
+    visited[node.id] = true
+    return isTeleportContinuation(node.prev[0], visited)
+}
+
+function isTeleportTail(node) {
+    if ((!node) || (node.type != "end")) {
+        return false
+    }
+    return isTeleportContinuation(node)
 }
 
 function drawEdge(render, edge) {
     var format, h, w, x1, x2, y1, y2
     // Телепорт завершает текущую схему визуально. Связь остаётся в данных,
     // чтобы не ломать структуру диаграммы и редактирование.
-    if (isTeleportInsertion(edge.head)) {
+    if (isTeleportContinuation(edge.head)) {
         return
     }
     x1 = getX(edge.head)
