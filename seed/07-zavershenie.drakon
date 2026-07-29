@@ -1,0 +1,16 @@
+{
+    "type": "drakon",
+    "items": {
+        "1": { "type": "end" },
+        "2": { "type": "branch", "branchId": 0, "one": "3", "content": "Завершение" },
+        "3": { "type": "question", "one": "4", "two": "9", "flag1": 1, "content": "У каждого CIDR есть coverage или причина неприменимости?" },
+        "4": { "type": "question", "one": "5", "two": "9", "flag1": 1, "content": "У каждого результата есть доказательство либо статус ошибки?" },
+        "5": { "type": "question", "one": "6", "two": "9", "flag1": 1, "content": "VPN lifecycle и manifest переданы в панель?" },
+        "6": { "type": "action", "one": "7", "content": "Сформировать выводы: подтверждённые факты, риски, блокировки, следующие разрешённые действия" },
+        "7": { "type": "action", "one": "8", "content": "Отключить VPN, проверить отсутствие ppp0 и сохранность control-route" },
+        "8": { "type": "action", "one": "1", "content": "Завершить запуск и передать оператору отчёт" },
+        "9": { "type": "action", "one": "1", "content": "Прогон неполный: указать незакрытые пункты и не присваивать статус полного завершения" }
+    },
+    "keywords": { "function": false, "machine": false, "async": false, "export": false, "algoprop": false, "lazy": false },
+    "params": "Этап 07. Завершение"
+}

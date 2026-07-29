@@ -1,0 +1,19 @@
+{
+    "type": "drakon",
+    "items": {
+        "1": { "type": "end" },
+        "2": { "type": "branch", "branchId": 0, "one": "3", "content": "Сервисы" },
+        "3": { "type": "action", "one": "4", "content": "Собрать NXC-first факты и version-light Nmap только по открытым портам" },
+        "4": { "type": "action", "one": "5", "content": "Классифицировать сервисы: AD, веб, SMB, RDP, SSH, WinRM, SNMP, БД, NAS" },
+        "5": { "type": "question", "one": "6", "two": "9", "flag1": 1, "content": "Есть признаки Active Directory: домен, LDAP или Kerberos?" },
+        "6": { "type": "action", "one": "7", "content": "Создать AD-ветку: DC-кандидаты, LDAP/Kerberos/SMB, связанные хосты" },
+        "7": { "type": "question", "one": "8", "two": "9", "flag1": 1, "content": "Есть веб-сервисы?" },
+        "8": { "type": "action", "one": "10", "content": "Создать веб-ветку: URL, TLS, заголовки, технология" },
+        "9": { "type": "action", "one": "10", "content": "Создать ветки доступных сетевых сервисов" },
+        "10": { "type": "question", "one": "11", "two": "12", "flag1": 1, "content": "Есть подтверждённая живая цель для следующей проверки?" },
+        "11": { "type": "action", "one": "1", "content": "Переход к 05-proverki.drakon с привязкой к хосту и сервису" },
+        "12": { "type": "action", "one": "1", "content": "Сохранить coverage: дальнейшая проверка неприменима" }
+    },
+    "keywords": { "function": false, "machine": false, "async": false, "export": false, "algoprop": false, "lazy": false },
+    "params": "Этап 04. Сервисы и ветви"
+}

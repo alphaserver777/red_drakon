@@ -1,0 +1,11377 @@
+(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+function traverseAst(context, node, itemId, parentNode, property) {
+    if (!node) { return }
+    if (Array.isArray(node)) {
+        for (var child of node) {
+            traverseAst(context, child, itemId, parentNode, property)
+        }
+    } else if (typeof node === "object" && node.type) {
+        if (node.itemId) {
+            itemId = node.itemId
+        }
+        if (node.type === "MemberExpression") {
+            traverseAst(context, node.object, itemId, node, "object")
+            if (node.computed) {
+                traverseAst(context, node.property, itemId, node, "property")
+            }
+        } else if (node.type === "ObjectExpression") {
+            for (var property of node.properties) {
+                if (property.computed) {
+                    traverseAst(context, property.key, itemId, node, "key")
+                }
+                traverseAst(context, property.value, itemId, node, "value")
+            }
+        } else if (node.type === "ArrayPattern") {
+            for (var element of node.elements) {
+                context.visit(element, itemId, node, "dec")
+            }
+        } else if (node.type === "ObjectPattern") {
+            for (var property of node.properties) {
+                if (!property.computed) {
+                    context.visit(property.key, itemId, node, "dec")
+                }
+            }
+        } else {
+            context = context.visit(node, itemId, parentNode, property)
+            if (node.type !== "Identifier" && node.type !== "Literal") {
+                for (var key in node) {
+                    if (key === "scope") {continue}
+                    var child = node[key]
+                    traverseAst(context, child, itemId, node, key)
+                }
+            }
+        }
+    }
+}
+
+module.exports = {
+    traverseAst
+}
+},{}],2:[function(require,module,exports){
+const {
+  createDrakonTechGenerator,
+  createClojureGenerator,
+} = require("./drakontechgen");
+const { Js2604Generator } = require("./js2604");
+const { Lua2604Generator } = require("./lua2604");
+const { Kumir2606Generator } = require("./kumir2606");
+const { Pfl2605Generator } = require("./pfl2605");
+const { Os2605Generator } = require("./os2605");
+const { createC2606Generator } = require("./c2606")
+
+
+window.drakontechgen = {
+  buildGenerator: function (
+    name,
+    root,
+    getObjectByHandle,
+    onError,
+    onData,
+    language,
+    main,
+    settings,
+    onAuxData
+  ) {
+    language = language || "JS2604";
+    var genOptions = {
+      toTree: window.drakongen.toTree,
+      escodegen: window.escodegen,
+      esprima: window.esprima,
+      parseLua: function(text) { return window.luaparse.parse(text)},
+      name: name,
+      main: main,
+      root: root,
+      getObjectByHandle: getObjectByHandle,
+      onError: onError,
+      onData: onData,
+      settings: settings,
+      onAuxData: onAuxData
+    };
+
+    if (language === "JS") {
+      return createDrakonTechGenerator(genOptions);
+    } else if (language === "LUA2604") {
+      return Lua2604Generator(genOptions);    
+    } else if (language === "JS2604") {
+      return Js2604Generator(genOptions);
+    } else if (language === "KUMIR2606") {
+      return Kumir2606Generator(genOptions);
+    } else if (language === "C2606") {
+      return createC2606Generator(genOptions);
+    } else if (language === "OS2605") {
+      return Os2605Generator(genOptions);          
+    } else if (language === "PFL2605") {
+      return Pfl2605Generator(genOptions);      
+    } else {
+      return createClojureGenerator(genOptions);
+    }
+  },
+};
+
+},{"./c2606":3,"./drakontechgen":5,"./js2604":6,"./kumir2606":7,"./lua2604":12,"./os2605":17,"./pfl2605":22}],3:[function(require,module,exports){
+function C2606Generator(tools) {
+    var self = { _type: 'C2606Generator' };
+    function addFunction(module, fun) {
+        if (fun.name in module.functions) {
+            tools.reportError('Function name is not unique', fun.path);
+        } else {
+            module.functions[fun.name] = fun;
+        }
+    }
+    function addLine(text, context) {
+        tools.addIndentedLine(text, context);
+    }
+    function buildCode(trees) {
+        var _branch_, header, hlines, name, node, result, slines, source;
+        _branch_ = 'Ветка1';
+        while (true) {
+            switch (_branch_) {
+            case 'Ветка1':
+                source = trees.source;
+                header = trees.header;
+                name = tools.getProjectName();
+                result = {};
+                if (header.length === 0) {
+                    _branch_ = 'Source';
+                } else {
+                    _branch_ = 'Header';
+                }
+                break;
+            case 'Header':
+                hlines = [];
+                headerStart(hlines);
+                for (node of header) {
+                    printNode(node, 0, hlines);
+                }
+                headerEnd(hlines);
+                result.auxCode = hlines.join('\n');
+                result.auxName = name + '.h';
+                _branch_ = 'Source';
+                break;
+            case 'Source':
+                slines = [];
+                if (!(header.length === 0)) {
+                    slines.push('#include "' + name + '.h"');
+                }
+                slines.push('');
+                for (node of source) {
+                    printNode(node, 0, slines);
+                }
+                slines.push('');
+                result.code = slines.join('\n');
+                _branch_ = 'Exit';
+                break;
+            case 'Exit':
+                _branch_ = undefined;
+                return result;
+            default:
+                return;
+            }
+        }
+    }
+    function buildGoto(branches, node) {
+        var branch, label;
+        branch = tools.findByName(branches, node.content);
+        label = tools.buildLabel(branch.name, branch.branchId);
+        return 'goto ' + label + ';';
+    }
+    function buildGuard(name) {
+        var random;
+        random = tools.random4Digits();
+        return name.toUpperCase() + '_H_' + random;
+    }
+    function buildMethodTree(func, output) {
+        var tree;
+        tree = {
+            type: 'function',
+            keywords: func.keywords,
+            name: func.name,
+            args: func.args,
+            returns: func.returns,
+            body: []
+        };
+        generateMethodBody(func, tree.body);
+        output.push(tree);
+    }
+    function buildTree(module) {
+        var func, header, name, names, source;
+        header = [];
+        source = [];
+        names = Object.keys(module.functions);
+        names = tools.removeElements(names, [
+            'begin_header',
+            'begin_source'
+        ]);
+        names.sort();
+        if (module.begin_header) {
+            generateMethodBody(module.functions['begin_header'], header);
+        }
+        for (name of names) {
+            func = module.functions[name];
+            if (func.type === 'struct' && func.keywords.export) {
+                generateStruct(func, header);
+            }
+        }
+        for (name of names) {
+            func = module.functions[name];
+            if (!(func.type === 'struct') && func.keywords.export) {
+                generateDeclaration(func, header);
+            }
+        }
+        if (module.begin_source) {
+            generateMethodBody(module.functions['begin_source'], source);
+        }
+        for (name of names) {
+            func = module.functions[name];
+            if (!(func.type === 'struct' || (func.keywords.export || func.name === 'main'))) {
+                generateDeclaration(func, source);
+            }
+        }
+        for (name of names) {
+            func = module.functions[name];
+            if (func.type === 'struct' && !func.keywords.export) {
+                generateStruct(func, source);
+            }
+        }
+        for (name of names) {
+            func = module.functions[name];
+            if (!(func.type === 'struct')) {
+                buildMethodTree(func, source);
+            }
+        }
+        return {
+            header: header,
+            source: source
+        };
+    }
+    function complexSilhouetteToTree(context, output) {
+        var branch, branches, first, label;
+        branches = context.branches;
+        first = branches[0];
+        if (first.refs === 0) {
+            tools.convertTree(context, first.body, output);
+            branches = branches.slice(1);
+        }
+        for (branch of branches) {
+            label = tools.buildLabel(branch.name, branch.branchId);
+            tools.addAction(label + ':', output, false);
+            tools.convertTree(context, branch.body, output);
+        }
+    }
+    function generateDeclaration(func, output) {
+        var tree;
+        tree = {
+            type: 'declaration',
+            keywords: func.keywords,
+            name: func.name,
+            args: func.args,
+            returns: func.returns
+        };
+        output.push(tree);
+    }
+    function generateMethodBody(func, output) {
+        var branches, buildGotoCallback, context, first, rawTree;
+        if (func) {
+            rawTree = tools.drakonToTree(func);
+            branches = rawTree.branches;
+            if (branches.length === 0) {
+            } else {
+                buildGotoCallback = node => {
+                    return buildGoto(branches, node);
+                };
+                context = {
+                    func: func,
+                    simple: true,
+                    branches: branches,
+                    returnKeyword: 'return',
+                    loopContent: 'while (1)',
+                    breakContent: 'break;',
+                    buildError: () => {
+                        return 'abort();';
+                    },
+                    qc: qc,
+                    buildGoto: buildGotoCallback
+                };
+                first = branches[0];
+                if (branches.length === 1) {
+                    tools.convertTree(context, first.body, output);
+                } else {
+                    if (tools.isSimpleSilhouette(rawTree)) {
+                        tools.convertTree(context, first.body, output);
+                    } else {
+                        context.simple = false;
+                        complexSilhouetteToTree(context, output);
+                    }
+                }
+            }
+        } else {
+        }
+    }
+    function generateStruct(func, output) {
+        var tree;
+        tree = {
+            type: 'struct',
+            keywords: func.keywords,
+            name: func.name,
+            body: []
+        };
+        generateMethodBody(func, tree.body);
+        output.push(tree);
+    }
+    function headerEnd(hlines) {
+        hlines.push('#ifdef __cplusplus');
+        hlines.push('}');
+        hlines.push('#endif');
+        hlines.push('#endif');
+        hlines.push('');
+    }
+    function headerStart(hlines) {
+        var guard, name;
+        name = tools.getProjectName();
+        guard = buildGuard(name);
+        hlines.push('#ifndef ' + guard);
+        hlines.push('#define ' + guard);
+        hlines.push('#ifdef __cplusplus');
+        hlines.push('#extern "C"{');
+        hlines.push('#endif');
+        hlines.push('');
+    }
+    function parseArguments(doc) {
+        var args, line, lines, ret, returns, skip;
+        lines = tools.getLines(doc.params);
+        args = [];
+        returns = 'void';
+        ret = 'return ';
+        for (line of lines) {
+            if (line.startsWith(ret)) {
+                skip = ret.length;
+                returns = line.substring(skip);
+            } else {
+                args.push(line);
+            }
+        }
+        if (args.length === 1 && args[0] === 'struct') {
+            doc.type = 'struct';
+        } else {
+            doc.returns = returns;
+            doc.args = args;
+        }
+    }
+    async function parseItems(module) {
+        var _collection_59, fun, name;
+        _collection_59 = module.functions;
+        for (name in _collection_59) {
+            fun = _collection_59[name];
+            parseItemsInDocument(fun);
+        }
+    }
+    function parseItemsInDocument(doc) {
+        var _collection_62, _collection_65, _selectValue_68, item, itemId;
+        parseArguments(doc);
+        if (doc.type === 'struct') {
+            _collection_65 = doc.items;
+            for (itemId in _collection_65) {
+                item = _collection_65[itemId];
+                _selectValue_68 = item.type;
+                if (!(_selectValue_68 === 'action' || (_selectValue_68 === 'branch' || _selectValue_68 === 'end'))) {
+                    tools.reportError('Only action icons are allowed in structs', doc.path, itemId);
+                }
+            }
+        } else {
+            _collection_62 = doc.items;
+            for (itemId in _collection_62) {
+                item = _collection_62[itemId];
+                tools.endToExit(item);
+            }
+        }
+    }
+    function printBlock(block, context, semi) {
+        var depth, lines, node;
+        tools.addIndentedLine('{', context);
+        depth = context.depth + 1;
+        lines = context.lines;
+        for (node of block) {
+            printNode(node, depth, lines);
+        }
+        if (semi) {
+            tools.addIndentedLine('};', context);
+        } else {
+            tools.addIndentedLine('}', context);
+        }
+    }
+    function printFunction(context) {
+        var lines, node;
+        lines = context.lines;
+        node = context.node;
+        printSignature(false, context);
+        printBlock(node.body, context);
+    }
+    function printLoop(context) {
+        var content, node;
+        node = context.node;
+        if (node.content.startsWith('for ') || node.content.startsWith('while ') || node.content.endsWith(')')) {
+            content = node.content;
+        } else {
+            content = 'for (' + node.content + ')';
+        }
+        addLine(content, context);
+        printBlock(node.body, context);
+    }
+    function printNode(node, depth, lines) {
+        var _selectValue_70, context;
+        context = {
+            node: node,
+            depth: depth,
+            lines: lines
+        };
+        _selectValue_70 = node.type;
+        if (_selectValue_70 === 'function') {
+            printFunction(context);
+        } else {
+            if (_selectValue_70 === 'declaration') {
+                printSignature(true, context);
+            } else {
+                if (_selectValue_70 === 'struct') {
+                    printStruct(context);
+                } else {
+                    if (_selectValue_70 === 'action') {
+                        tools.printAction(context);
+                    } else {
+                        if (_selectValue_70 === 'question') {
+                            printQuestion(context);
+                        } else {
+                            if (_selectValue_70 === 'loop') {
+                                printLoop(context);
+                            } else {
+                                if (_selectValue_70 === 'empty-line') {
+                                    context.lines.push('');
+                                } else {
+                                    if (!(_selectValue_70 === 'exit')) {
+                                        throw new Error('Unexpected case value: ' + _selectValue_70);
+                                    }
+                                    addLine('return;', context);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    function printQuestion(context) {
+        var condition, node;
+        node = context.node;
+        condition = tools.toOneLine(node.content);
+        addLine('if (' + condition + ')', context);
+        printBlock(node.yes, context);
+        if (!(node.no.length === 0)) {
+            addLine('else', context);
+            printBlock(node.no, context);
+        }
+    }
+    function printSignature(addSemicolon, context) {
+        var arg, comment, i, lines, name, node, parts;
+        lines = context.lines;
+        node = context.node;
+        lines.push('');
+        if (node.keywords.export || node.name === 'main') {
+            lines.push(node.returns);
+        } else {
+            lines.push('static ' + node.returns);
+        }
+        if (node.args.length === 0) {
+            if (addSemicolon) {
+                lines.push(node.name + '(void);');
+            } else {
+                lines.push(node.name + '(void)');
+            }
+        } else {
+            lines.push(node.name + '(');
+            for (i = 0; i < node.args.length; i++) {
+                arg = node.args[i];
+                parts = arg.split('//');
+                if (i === node.args.length - 1) {
+                    lines.push('    ' + arg);
+                } else {
+                    if (parts.length === 1) {
+                        lines.push('    ' + arg + ',');
+                    } else {
+                        name = parts[0].trim();
+                        comment = parts[1].trim();
+                        lines.push('    ' + name + ', //' + comment);
+                    }
+                }
+            }
+            if (addSemicolon) {
+                lines.push(');');
+            } else {
+                lines.push(')');
+            }
+        }
+    }
+    function printStruct(context) {
+        var lines, node;
+        lines = context.lines;
+        node = context.node;
+        lines.push('struct ' + node.name);
+        printBlock(node.body, context, true);
+    }
+    function qc(content) {
+        var _selectValue_74, left, operand, right;
+        if (typeof content === 'string') {
+            return content;
+        } else {
+            _selectValue_74 = content.operator;
+            if (_selectValue_74 === 'not') {
+                operand = qc(content.operand);
+                return '!(' + operand + ')';
+            } else {
+                if (_selectValue_74 === 'and') {
+                    left = qc(content.left);
+                    right = qc(content.right);
+                    return '(' + left + ') && (' + right + ')';
+                } else {
+                    if (_selectValue_74 === 'or') {
+                        left = qc(content.left);
+                        right = qc(content.right);
+                        return '(' + left + ') || (' + right + ')';
+                    } else {
+                        if (!(_selectValue_74 === 'equal')) {
+                            throw new Error('Unexpected case value: ' + _selectValue_74);
+                        }
+                        left = qc(content.left);
+                        right = qc(content.right);
+                        return left + ' == ' + right;
+                    }
+                }
+            }
+        }
+    }
+    async function readProject() {
+        var module, rootFolder;
+        rootFolder = await tools.readRoot();
+        module = {
+            functions: {},
+            begin_source: false,
+            begin_header: false
+        };
+        await readProjectFolder(module, rootFolder);
+        return module;
+    }
+    async function readProjectFolder(module, folder) {
+        var _selectValue_72, child, children;
+        children = await tools.readChildren(folder);
+        for (child of children) {
+            if (child.type === 'folder') {
+                await readProjectFolder(module, child);
+            } else {
+                addFunction(module, child);
+                _selectValue_72 = child.name;
+                if (_selectValue_72 === 'begin_header') {
+                    module.begin_header = true;
+                } else {
+                    if (_selectValue_72 === 'begin_source') {
+                        module.begin_source = true;
+                    }
+                }
+            }
+        }
+    }
+    self.buildCode = buildCode;
+    self.buildTree = buildTree;
+    self.parseItems = parseItems;
+    self.readProject = readProject;
+    return self;
+}
+function GenRunner(options, buildGenerator) {
+    var self = { _type: 'GenRunner' };
+    var errors = [];
+    function pause(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    async function run() {
+        var _collection_76, error, result;
+        result = await runCore();
+        if (result.errors.length === 0) {
+            if (result.code.auxCode) {
+                await options.onAuxData(result.code.auxName, result.code.auxCode);
+            }
+            await options.onData(result.code.code);
+        } else {
+            _collection_76 = result.errors;
+            for (error of _collection_76) {
+                options.onError(error);
+            }
+        }
+    }
+    async function runCore() {
+        var code, ex, generator, project, tools, tree;
+        try {
+            errors = [];
+            code = '';
+            tools = GenTools(options, errors);
+            generator = buildGenerator(tools);
+            project = await generator.readProject();
+            if (errors.length === 0) {
+                await pause(1);
+                await generator.parseItems(project);
+                if (errors.length === 0) {
+                    await pause(1);
+                    tree = generator.buildTree(project);
+                    if (errors.length === 0) {
+                        await pause(1);
+                        code = generator.buildCode(tree);
+                    }
+                }
+            }
+            return {
+                code: code,
+                errors: errors
+            };
+        } catch (_handlerData_) {
+            ex = _handlerData_;
+            tools.reportError(ex.message, ex.filename, ex.nodeId, ex.data);
+            return {
+                code: '',
+                errors: errors
+            };
+        }
+    }
+    function stop() {
+    }
+    self.run = run;
+    self.runCore = runCore;
+    self.stop = stop;
+    return self;
+}
+function GenTools(options, errors) {
+    var self = { _type: 'GenTools' };
+    function addAction(text, output, isFinal) {
+        var item;
+        item = {
+            type: 'action',
+            content: text,
+            final: isFinal || false
+        };
+        output.push(item);
+    }
+    function addIndentedLine(text, context) {
+        var indent, line;
+        indent = createIndent(context);
+        line = indent + text;
+        context.lines.push(line);
+    }
+    function buildLabel(name, id) {
+        var result;
+        if (!name) {
+            return '_' + id;
+        }
+        result = name.replace(/[^A-Za-z0-9_]/g, '_');
+        if (/^[0-9]/.test(result)) {
+            result = '_' + result;
+        }
+        return result;
+    }
+    function convertTree(context, body, output) {
+        var _selectValue_78, content, finalStep, item, next, node;
+        for (node of body) {
+            _selectValue_78 = node.type;
+            if (_selectValue_78 === 'action') {
+                content = node.content;
+                finalStep = isFinal(context.func, node, context.returnKeyword);
+                item = {
+                    content: content,
+                    type: node.type,
+                    final: finalStep
+                };
+                output.push(item);
+            } else {
+                if (_selectValue_78 === 'exit') {
+                    if (!(context.simple || hasFinal(output))) {
+                        item = {
+                            type: node.type,
+                            final: true
+                        };
+                        output.push(item);
+                    }
+                } else {
+                    if (_selectValue_78 === 'question') {
+                        content = context.qc(node.content);
+                        item = {
+                            content: content,
+                            type: node.type,
+                            yes: [],
+                            no: []
+                        };
+                        convertTree(context, node.yes, item.yes);
+                        convertTree(context, node.no, item.no);
+                        output.push(item);
+                    } else {
+                        if (_selectValue_78 === 'loop') {
+                            content = node.content || context.loopContent;
+                            item = {
+                                type: 'loop',
+                                content: content,
+                                body: []
+                            };
+                            convertTree(context, node.body, item.body);
+                            output.push(item);
+                        } else {
+                            if (_selectValue_78 === 'address') {
+                                if (!hasFinal(output)) {
+                                    if (context.simple) {
+                                        next = findByName(context.branches, node.content);
+                                        convertTree(context, next.body, output);
+                                    } else {
+                                        content = context.buildGoto(node);
+                                        addAction(content, output, true);
+                                    }
+                                }
+                            } else {
+                                if (_selectValue_78 === 'break') {
+                                    if (!hasFinal(output)) {
+                                        addAction(context.breakContent, output, true);
+                                    }
+                                } else {
+                                    if (_selectValue_78 === 'error') {
+                                        content = context.buildError(node);
+                                        addAction(content, output, true);
+                                    } else {
+                                        reporError('Unexpected node type: ' + node.type, context.func.path, node.id);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    function createIndent(context) {
+        return ' '.repeat(4 * context.depth);
+    }
+    function drakonToTree(func) {
+        var json, opt, tmp, treeJson;
+        tmp = { items: func.items };
+        json = JSON.stringify(tmp);
+        opt = {};
+        treeJson = options.toTree(json, func.name, func.path, 'en', opt);
+        return JSON.parse(treeJson);
+    }
+    function endToExit(item) {
+        if (item.type == 'end') {
+            item.type = 'exit';
+        }
+    }
+    function findByName(array, name) {
+        var element;
+        for (element of array) {
+            if (element.name === name) {
+                return element;
+            }
+        }
+        return undefined;
+    }
+    function getLines(text) {
+        var line, lines, result, trimmed;
+        if (text) {
+            lines = text.split('\n');
+            result = [];
+            for (line of lines) {
+                trimmed = line.trim();
+                if (trimmed) {
+                    result.push(trimmed);
+                }
+            }
+            return result;
+        } else {
+            return [];
+        }
+    }
+    function getProjectName() {
+        return options.name;
+    }
+    function hasFinal(body) {
+        var count, last;
+        count = body.length;
+        if (count === 0) {
+            return false;
+        } else {
+            last = body[count - 1];
+            if (last.final) {
+                return true;
+            } else {
+                if (last.type === 'question' && hasFinal(last.yes) && hasFinal(last.no)) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+        }
+    }
+    function isFinal(func, node, returnKeyword) {
+        var content, item;
+        if (node.id) {
+            item = func.items[node.id];
+            content = item.content;
+            if (content && (content.startsWith(returnKeyword + ' ') || content.startsWith(returnKeyword + ';') || content === returnKeyword)) {
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    function isSimpleSilhouette(rawTree) {
+        var branch, branches, count, first, i;
+        branches = rawTree.branches;
+        first = branches[0];
+        if (first.refs > 0) {
+            return false;
+        } else {
+            count = branches.length;
+            for (i = 0; i < count; i++) {
+                branch = branches[i];
+                if (!(!(branch.refs > 1) || i === count - 1 && !(branch.body.length > 2))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+    function printAction(context) {
+        printIndentedBlock(context.node.content, context);
+    }
+    function printIndentedBlock(text, context) {
+        var indent, line, lines;
+        if (text) {
+            lines = text.split('\n');
+            indent = createIndent(context);
+            for (line of lines) {
+                context.lines.push(indent + line);
+            }
+        }
+    }
+    function random4Digits() {
+        return Math.floor(Math.random() * 9000) + 1000;
+    }
+    async function readChildren(node) {
+        var _collection_80, child, childPath, result;
+        if (node.children) {
+            result = [];
+            _collection_80 = node.children;
+            for (childPath of _collection_80) {
+                child = await readObject(childPath);
+                if (child && (child.type === 'drakon' || child.type === 'folder')) {
+                    result.push(child);
+                }
+            }
+            return result;
+        } else {
+            return [];
+        }
+    }
+    async function readObject(handle) {
+        var node;
+        node = await options.getObjectByHandle(handle);
+        if (node && node.type === 'drakon') {
+            node.items = node.items || {};
+            node.keywords = node.keywords || {};
+        }
+        return node;
+    }
+    async function readRoot() {
+        return await readObject(options.root);
+    }
+    function removeElements(from, what) {
+        var element, result;
+        result = [];
+        for (element of from) {
+            if (what.indexOf(element) === -1) {
+                result.push(element);
+            }
+        }
+        return result;
+    }
+    function reportError(message, filename, nodeId, data) {
+        errors.push({
+            message: message,
+            filename: filename,
+            nodeId: nodeId,
+            data: data
+        });
+    }
+    function toOneLine(text) {
+        var lines, trimmed;
+        if (text) {
+            lines = text.split('\n');
+            trimmed = lines.map(line => {
+                return line.trim();
+            });
+            return trimmed.join(' ');
+        } else {
+            return '';
+        }
+    }
+    self.addAction = addAction;
+    self.addIndentedLine = addIndentedLine;
+    self.buildLabel = buildLabel;
+    self.convertTree = convertTree;
+    self.createIndent = createIndent;
+    self.drakonToTree = drakonToTree;
+    self.endToExit = endToExit;
+    self.findByName = findByName;
+    self.getLines = getLines;
+    self.getProjectName = getProjectName;
+    self.hasFinal = hasFinal;
+    self.isSimpleSilhouette = isSimpleSilhouette;
+    self.printAction = printAction;
+    self.printIndentedBlock = printIndentedBlock;
+    self.random4Digits = random4Digits;
+    self.readChildren = readChildren;
+    self.readObject = readObject;
+    self.readRoot = readRoot;
+    self.removeElements = removeElements;
+    self.reportError = reportError;
+    self.toOneLine = toOneLine;
+    return self;
+}
+function createC2606Generator(options) {
+    return GenRunner(options, C2606Generator);
+}
+module.exports = {
+    GenRunner,
+    createC2606Generator
+};
+},{}],4:[function(require,module,exports){
+
+function lexClojure(text) {
+    const operators = ["(", ")", "[", "]", "{", "}", "#", ",", "`", "'"];
+
+    // Helper functions
+    function isWhitespace(symbol) {
+        const code = symbol.charCodeAt(0);
+        return code === 32 ||  // space
+               code === 9 ||   // tab
+               code === 10 ||  // newline
+               code === 13;    // carriage return
+    }
+
+    function isDigit(symbol) {
+        const code = symbol.charCodeAt(0);
+        return code >= 48 && code <= 57; // 0-9
+    }
+
+    function isOperator(symbol) {
+        return operators.includes(symbol);
+    }
+
+    // Lexer procedures
+    function createLexer() {
+        return {
+            tokens: [],
+            state: "idle",
+            substate: null,
+            buffer: "",
+            tokenType: null
+        };
+    }
+
+    function createToken(type, text) {
+        return {
+            text: text,
+            type: type
+        };
+    }
+
+    function finishToken(lexer) {
+        if (lexer.buffer.length > 0) {
+            const token = createToken(lexer.tokenType, lexer.buffer);
+            lexer.tokens.push(token);
+            lexer.buffer = "";
+        }
+        lexer.state = "idle";
+    }
+
+    function forwardToken(lexer, type, symbol) {
+        const token = createToken(type, symbol);
+        lexer.tokens.push(token);
+    }
+
+    // Handler procedures
+    function handleBuilding(lexer, symbol) {
+        if (symbol === "#") {
+            lexer.buffer += symbol;
+            lexer.tokenType = "error";
+        } else {
+            if (symbol === ";") {
+                finishToken(lexer);
+                forwardToken(lexer, "comment", symbol);
+                lexer.state = "comment";
+                lexer.substate = "idle";
+            } else {
+                if ((symbol === ":") || (symbol === "\"") || (symbol === "\\")) {
+                    lexer.buffer += symbol;
+                    lexer.tokenType = "error";
+                } else {
+                    if (isWhitespace(symbol)) {
+                        finishToken(lexer);
+                        forwardToken(lexer, "whitespace", symbol);
+                    } else {
+                        if (isOperator(symbol)) {
+                            finishToken(lexer);
+                            forwardToken(lexer, "operator", symbol);
+                        } else {
+                            lexer.buffer += symbol;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    function handleComment(lexer, symbol) {
+        if (symbol === "\n") {
+            finishToken(lexer);
+            forwardToken(lexer, "whitespace", symbol);
+        } else {
+            if (lexer.substate === "idle") {
+                if (isWhitespace(symbol)) {
+                    forwardToken(lexer, "whitespace", symbol);
+                } else {
+                    lexer.buffer += symbol;
+                    lexer.tokenType = "comment";
+                    lexer.substate = "normal";
+                }
+            } else {
+                if (isWhitespace(symbol)) {
+                    finishToken(lexer);
+                    forwardToken(lexer, "whitespace", symbol);
+                    lexer.state = "comment";
+                    lexer.substate = "idle";
+                } else {
+                    lexer.buffer += symbol;
+                }
+            }
+        }
+    }
+
+    function handleDash(lexer, symbol) {
+        if (symbol === "#") {
+            lexer.buffer = "##";
+            lexer.state = "building";
+            lexer.tokenType = "special";
+        } else {
+            forwardToken(lexer, "operator", "#");
+            lexer.state = "idle";
+            handleIdle(lexer, symbol);
+        }
+    }
+
+    function handleIdle(lexer, symbol) {
+        if (symbol === "#") {
+            lexer.state = "dash";
+        } else {
+            if (symbol === ";") {
+                forwardToken(lexer, "comment", symbol);
+                lexer.state = "comment";
+                lexer.substate = "idle";
+            } else {
+                if (symbol === ":") {
+                    lexer.buffer += symbol;
+                    lexer.state = "building";
+                    lexer.tokenType = "keyword";
+                } else {
+                    if (symbol === "\"") {
+                        lexer.buffer += symbol;
+                        lexer.state = "string";
+                        lexer.substate = "normal";
+                        lexer.tokenType = "string";
+                    } else {
+                        if (symbol === "\\") {
+                            lexer.buffer += symbol;
+                            lexer.state = "building";
+                            lexer.tokenType = "backslash";
+                        } else {
+                            if (isWhitespace(symbol)) {
+                                forwardToken(lexer, "whitespace", symbol);
+                            } else {
+                                if (isOperator(symbol)) {
+                                    forwardToken(lexer, "operator", symbol);
+                                } else {
+                                    if (isDigit(symbol)) {
+                                        lexer.buffer += symbol;
+                                        lexer.state = "building";
+                                        lexer.tokenType = "number";
+                                    } else {
+                                        lexer.buffer += symbol;
+                                        lexer.state = "building";
+                                        lexer.tokenType = "identifier";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    function handleString(lexer, symbol) {
+        if (symbol === "\n") {
+            lexer.tokenType = "error";
+            finishToken(lexer);
+            forwardToken(lexer, "whitespace", symbol);
+        } else {
+            lexer.buffer += symbol;
+            if (lexer.substate === "normal") {
+                if (symbol === "\"") {
+                    finishToken(lexer);
+                } else {
+                    if (symbol === "\\") {
+                        lexer.substate = "escaping";
+                    }
+                }
+            } else {
+                lexer.substate = "normal";
+            }
+        }
+    }
+
+    function pushNextSymbol(lexer, symbol) {
+        if (symbol !== "\r") {
+            switch (lexer.state) {
+                case "idle":
+                    handleIdle(lexer, symbol);
+                    break;
+                case "dash":
+                    handleDash(lexer, symbol);
+                    break;
+                case "building":
+                    handleBuilding(lexer, symbol);
+                    break;
+                case "string":
+                    handleString(lexer, symbol);
+                    break;
+                case "comment":
+                    handleComment(lexer, symbol);
+                    break;
+                default:
+                    throw new Error(`Unexpected case value: ${lexer.state}`);
+            }
+        }
+    }
+
+    function processToken(token) {
+        if (token.type === "whitespace") {
+            if (token.text === "\n") {
+                token.type = "eol";
+            }
+        } else {
+            if (token.type === "special") {
+                if (token.text === "##Inf" || token.text === "##-Inf" || token.text === "##NaN") {
+                    token.type = "number";
+                } else {
+                    token.type = "error";
+                }
+            } else {
+                if (token.type === "backslash") {
+                    token.type = "number";
+                }
+            }
+        }
+    }
+
+    // Main lexing procedure
+    const lexer = createLexer();
+
+    text = text || ""
+    // Process each character in the input text
+    for (let i = 0; i < text.length; i++) {
+        pushNextSymbol(lexer, text[i]);
+    }
+    
+    // Push a final newline to ensure all tokens are flushed
+    pushNextSymbol(lexer, "\n");
+    
+    // Process all tokens
+    for (const token of lexer.tokens) {
+        processToken(token);
+    }
+    
+    // Remove trailing eol tokens
+    while (lexer.tokens.length > 0 && lexer.tokens[lexer.tokens.length - 1].type === "eol") {
+        lexer.tokens.pop();
+    }
+    
+    return lexer.tokens;
+}
+
+module.exports = {
+    lexClojure
+}
+
+},{}],5:[function(require,module,exports){
+const { sortBy, findFirst, addRange, clone, replace } = require("./tools");
+const { traverseAst } = require("./astScanner");
+const { topologicaSort } = require("./sort");
+const { lexClojure } = require("./clojurelexer");
+
+var verbose = false;
+
+async function pause(milliseconds) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function tr(text) {
+    return text;
+}
+
+function createClojureGenerator(options) {
+    var state = "idle";
+    var failed = false;
+    var project = {
+        functions: {},
+    };
+
+    function checkCancellation() {
+        if (!state) {
+            var error = new Error("Cancelled");
+            error.cancelled = true;
+            throw error;
+        }
+    }
+
+    async function readChildren(folder) {
+        var result = [];
+        for (var filepath of folder.children) {
+            var child = await options.getObjectByHandle(filepath);
+            if (child) {
+                result.push(child);
+            }
+        }
+        return result;
+    }
+
+    function isModule(folder) {
+        return folder.type === "drakon" && folder.name === "module";
+    }
+
+    function isFunction(folder) {
+        if (folder.type === "drakon") {
+            return true;
+        }
+        return false;
+    }
+
+    async function traverseModuleItem(folder) {
+        if (verbose) {
+            console.log("traverseModuleItem", folder.path);
+        }
+        checkCancellation();
+        if (folder.type === "folder") {
+            var children = await readChildren(folder);
+            for (var child of children) {
+                await traverseModuleItem(child);
+            }
+        } else if (isModule(folder)) {
+            reportError("module not expected here", folder.path);
+        } else if (isFunction(folder)) {
+            addFunction(folder);
+        }
+    }
+
+    function addFunction(folder) {
+        if (verbose) {
+            console.log("addFunction", folder.name, folder.path);
+        }
+        var name = folder.name;
+        if (project.functions[name]) {
+            reportError(
+                tr("Function name is not unique") + ": " + name,
+                folder.path,
+            );
+        }
+        project.functions[name] = folder;
+    }
+
+    function reportError(message, filename, nodeId, data) {
+        failed = true;
+        options.onError({
+            message: message,
+            filename: filename,
+            nodeId: nodeId,
+            data: data,
+        });
+    }
+
+    function writeModuleInit(output) {
+        var fun = project.moduleInit;
+        if (!fun) {
+            return;
+        }
+        var lines = [];
+        for (var node of fun.bodyNodes) {
+            printClojureNode(node, lines, 0);
+        }
+        var generated = lines.join("\n");
+        output.push(generated);
+        output.push("");
+    }
+
+    function findDeclares() {
+        if (!project.moduleInit) {
+            return [];
+        }
+        var afterDeclare = false;
+        var declares = [];
+        for (var identifier of project.moduleInit.identifiers) {
+            if (afterDeclare) {
+                afterDeclare = false;
+                declares.push(identifier);
+            } else if (identifier === "declare") {
+                afterDeclare = true;
+            }
+        }
+        return declares;
+    }
+
+    function separateDeclared(declares, notDeclared, declared) {
+        for (var name in project.functions) {
+            if (declares.indexOf(name) === -1) {
+                notDeclared.push(name);
+            } else {
+                declared.push(name);
+            }
+        }
+    }
+
+    function sortByDependency(notDeclared) {
+        var graph = buildDependencyGraph(notDeclared);
+        var islands = findIslands(graph);
+        var unused = [];
+        var sorted = [];
+        for (var island of islands) {
+            if (island.length === 1) {
+                unused.push(island[0]);
+            } else {
+                addRange(sorted, island);
+            }
+        }
+        unused.sort();
+        addRange(sorted, unused);
+        return sorted;
+    }
+
+    function buildDependencyGraph(notDeclared) {
+        var graph = {};
+        for (var name of notDeclared) {
+            var adjucent = buildDependenciesForFunction(name, notDeclared);
+            graph[name] = adjucent;
+        }
+        return graph;
+    }
+
+    function buildDependenciesForFunction(name, notDeclared) {
+        var fun = project.functions[name];
+        var set = {};
+        for (var identifier of fun.identifiers) {
+            if (notDeclared.indexOf(identifier) !== -1) {
+                set[identifier] = true;
+            }
+        }
+        var names = Object.keys(set);
+        names.sort();
+        return names;
+    }
+
+    function findIslands(graph) {
+        var withDeps = [];
+        var all = {};
+        for (var name in graph) {
+            var deps = sortDepsForOneFun(graph, name);
+            all[name] = true;
+            withDeps.push(deps);
+        }
+        withDeps.sort(compareByLength);
+        var islands = [];
+        for (var items of withDeps) {
+            if (items[0] in all) {
+                for (var dep of items) {
+                    delete all[dep];
+                }
+                islands.push(items);
+            }
+        }
+        return islands;
+    }
+
+    function compareByLength(a, b) {
+        return b.length - a.length;
+    }
+
+    function sortDepsForOneFun(graph, name) {
+        var start = name;
+        var getAdjacentNodes = (key) => {
+            return graph[key];
+        };
+        var reportGraphError = (key, message) => {
+            var fun = project.functions[key];
+            reportError(
+                "Detected a cycle in function dependencies: " + key,
+                fun.path,
+                undefined,
+                message,
+            );
+        };
+        var deps = topologicaSort(start, getAdjacentNodes, reportGraphError);
+        return deps;
+    }
+
+    function addMain(output) {
+        if (!options.main) {
+            return;
+        }
+        if (!(options.main in project.functions)) {
+            reportError("Main function " + options.main + " is not defined");
+        }
+        output.push("(" + options.main + ")");
+    }
+
+    function generateSourceCode() {
+        failed = false;
+        if (project.moduleInit) {
+            buildFunctionBody(project.moduleInit);
+        }
+        for (var name in project.functions) {
+            var fun = project.functions[name];
+            buildFunctionBody(fun);
+        }
+        if (failed) {
+            return "";
+        }
+        var declares = findDeclares();
+        var notDeclared = [];
+        var declared = [];
+        separateDeclared(declares, notDeclared, declared);
+        notDeclared = sortByDependency(notDeclared);
+        var output = [];
+        writeModuleInit(output);
+        notDeclared.forEach((name) => writeFunction(name, output));
+        declared.forEach((name) => writeFunction(name, output));
+        addMain(output);
+        return output.join("\n");
+    }
+
+    function createClojureNode(tag) {
+        return {
+            strings: [tag],
+            children: [],
+        };
+    }
+
+    function printClojureNode(node, output, depth) {
+        var indent = " ".repeat(depth * 2);
+        if (typeof node === "string") {
+            output.push(indent + node);
+            return;
+        }
+        var firstLine = indent + "(" + node.strings.join(" ");
+        output.push(firstLine);
+        for (var child of node.children) {
+            printClojureNode(child, output, depth + 1);
+        }
+        closeBracket(output);
+    }
+
+    function closeBracket(output) {
+        var last = output[output.length - 1];
+        last += ")";
+        output[output.length - 1] = last;
+    }
+
+    function handleError(fun, item, output) {
+        var node = createClojureNode("throw");
+        var ex = createClojureNode("RuntimeException.");
+        var messageNode = createClojureNode("str");
+        messageNode.strings.push('"' + item.message + '"');
+        messageNode.strings.push('": "');
+        messageNode.strings.push(makeCondition(item.content));
+        ex.children.push(messageNode);
+        node.children.push(ex);
+        output.push(node);
+    }
+
+    function handleAction(fun, item, output) {
+        var content = normalizeContent(item);
+        if (content.startsWith("let ") || content.startsWith("let\t")) {
+            handleLet(fun, item, content, output);
+        } else {
+            handleNormalAction(fun, item, content, output);
+        }
+    }
+
+    function inSquareBrackets(text) {
+        if (!text) {
+            return false;
+        }
+        if (text.length < 2) {
+            return false;
+        }
+        if (text[0] === "[" && text[text.length - 1] === "]") {
+            return true;
+        }
+        return false;
+    }
+    function handleLet(fun, item, content, output) {
+        var noLet = makeOneLine(content.substring(4));
+        var core = noLet;
+        if (!inSquareBrackets(core)) {
+            core = "[" + core + "]";
+        }
+
+        var node = createClojureNode("let");
+        node.strings.push(core);
+        output.push(node);
+        handleItem(fun, item.next, node.children);
+    }
+
+    function makeOneLine(content) {
+        if (!content) {
+            return "";
+        }
+        var lines = content.split("\n").map((line) => {
+            return line.trim();
+        });
+        return lines.join(" ");
+    }
+
+    function handleNormalAction(fun, item, content, output) {
+        if (content) {
+            var line = makeOneLine(content);
+            output.push(line);
+        }
+        handleItem(fun, item.next, output);
+    }
+
+    function makeCondition(content) {
+        if (!content) {
+            return "true";
+        }
+        if (typeof content === "string") {
+            var line = makeOneLine(content);
+            var tokens = lexClojure(line);
+            if (tokens.length === 1) {
+                return tokens[0].text;
+            } else if (tokens.length > 1) {
+                var first = tokens[0];
+                var last = tokens[tokens.length - 1];
+                if (first.text !== "(" || last.text !== ")") {
+                    return "(" + line + ")";
+                }
+            } else {
+                return line;
+            }
+        }
+
+        if (content.operator === "not") {
+            return "(not " + makeCondition(content.operand) + ")";
+        }
+        if (content.operator === "and") {
+            return (
+                "(and " +
+                makeCondition(content.left) +
+                " " +
+                makeCondition(content.right) +
+                ")"
+            );
+        }
+        if (content.operator === "or") {
+            return (
+                "(or " +
+                makeCondition(content.left) +
+                " " +
+                makeCondition(content.right) +
+                ")"
+            );
+        }
+        if (content.operator === "equal") {
+            return (
+                "(= " +
+                makeCondition(content.left) +
+                " " +
+                makeCondition(content.right) +
+                ")"
+            );
+        }
+        return makeOneLine(content);
+    }
+
+    function handleQuestion(fun, item, output) {
+        var condition = item.content;
+        var ifNode = createClojureNode("if");
+        output.push(ifNode);
+        ifNode.strings.push(condition);
+        addIfBranch(fun, ifNode, item.yes);
+        addIfBranch(fun, ifNode, item.no);
+    }
+
+    function addIfBranch(fun, ifNode, children) {
+        var output = [];
+        handleItem(fun, children, output);
+        if (output.length === 1) {
+            ifNode.children.push(output[0]);
+        } else {
+            var doNode = createClojureNode("do");
+            ifNode.children.push(doNode);
+            doNode.children = output;
+        }
+    }
+
+    function normalizeContent(item) {
+        var content = item.content || "";
+        content = content.trim();
+        return content;
+    }
+
+    function isOneToken(content) {
+        if (!content) {
+            return false;
+        }
+        if (typeof content === "string") {
+            content = content.trim();
+            var tokens = lexClojure();
+        }
+        if (tokens.length === 1) {
+            return true;
+        }
+        return false;
+    }
+
+    function buildQuestionContent(content) {
+        var condition = makeCondition(content);
+        return condition;
+    }
+
+    function expandTreeItem(fun, body, next, tree, visited) {
+        var newNode = next;
+        for (var i = body.length - 1; i >= 0; i--) {
+            var oldNode = body[i];
+            if (oldNode.type === "action") {
+                newNode = {
+                    type: oldNode.type,
+                    id: oldNode.id,
+                    content: oldNode.content,
+                    next: newNode,
+                };
+                newNode.tokens = lexClojure(newNode.content);
+            } else if (oldNode.type === "address") {
+                if (visited.indexOf(oldNode.content) !== -1) {
+                    reportError(
+                        tr("Cycle detected") + ": " + oldNode.content,
+                        fun.path,
+                        oldNode.id,
+                    );
+                    return undefined;
+                }
+                var nextBranch = findFirst(tree.branches, (br) => {
+                    return br.name === oldNode.content;
+                });
+                var visited2 = visited.slice();
+                visited2.push(oldNode.content);
+                newNode = expandTreeItem(
+                    fun,
+                    nextBranch.body,
+                    newNode,
+                    tree,
+                    visited2,
+                );
+            } else if (oldNode.type === "error") {
+                newNode = {
+                    type: oldNode.type,
+                    id: oldNode.id,
+                    content: oldNode.content,
+                    message: oldNode.message,
+                    next: newNode,
+                };
+            } else if (oldNode.type === "question") {
+                var yes = oldNode.yes;
+                var no = oldNode.no;
+                var content = oldNode.content;
+                if (content && content.operator === "not") {
+                    content = content.operand;
+                    yes = oldNode.no;
+                    no = oldNode.yes;
+                }
+                newNode = {
+                    type: oldNode.type,
+                    id: oldNode.id,
+                    content: buildQuestionContent(content),
+                    yes: expandTreeItem(fun, yes, newNode, tree, visited),
+                    no: expandTreeItem(fun, no, newNode, tree, visited),
+                };
+                newNode.tokens = lexClojure(newNode.content);
+            } else if (oldNode.type === "end") {
+                // don't do anything
+            } else {
+                reportError(
+                    tr("Unsupported item type") + ": " + oldNode.type,
+                    fun.path,
+                    oldNode.id,
+                );
+                return undefined;
+            }
+        }
+        return newNode;
+    }
+
+    function collectIdentifiers(item, identifiers) {
+        if (!item) {
+            return;
+        }
+        if (item.tokens) {
+            for (var token of item.tokens) {
+                if (token.type === "identifier") {
+                    identifiers.push(token.text);
+                }
+            }
+        }
+        collectIdentifiers(item.yes, identifiers);
+        collectIdentifiers(item.no, identifiers);
+        collectIdentifiers(item.next, identifiers);
+    }
+
+    function generateClojureBody(fun, tree, output) {
+        if (tree.branches.length === 0) {
+            return;
+        }
+
+        var firstBranch = tree.branches[0];
+
+        var firstName = firstBranch.name;
+        var expanded = expandTreeItem(fun, firstBranch.body, undefined, tree, [
+            firstName,
+        ]);
+        fun.identifiers = [];
+        collectIdentifiers(expanded, fun.identifiers);
+        handleItem(fun, expanded, output);
+    }
+
+    function handleItem(fun, item, output) {
+        if (!item) {
+            return;
+        }
+        if (item.type === "action") {
+            handleAction(fun, item, output);
+        } else if (item.type === "error") {
+            handleError(fun, item, output);
+        } else if (item.type === "question") {
+            handleQuestion(fun, item, output);
+        } else if (item.type === "end") {
+            // don't do anything
+        } else {
+            reportError(
+                tr("Unsupported item type") + ": " + item.type,
+                fun.path,
+                item.id,
+            );
+        }
+    }
+
+    function makeArgumentList(fun) {
+        var params = makeOneLine(fun.params);
+        return "[" + params + "]";
+    }
+
+    function buildFunctionBody(fun) {
+        try {
+            var tree = generateFunctionTree(fun);
+            var bodyNodes = [];
+            generateClojureBody(fun, tree, bodyNodes);
+            fun.bodyNodes = bodyNodes;
+        } catch (ex) {
+            console.log(ex);
+            reportError(ex.message, fun.path, ex.nodeId);
+            fun.bodyNodes = [];
+        }
+    }
+
+    function writeFunction(name, output) {
+        var fun = project.functions[name];
+        var funNode = createClojureNode("defn");
+        funNode.strings.push(fun.name);
+        funNode.strings.push(makeArgumentList(fun));
+        funNode.children = fun.bodyNodes;
+        var lines = [];
+        printClojureNode(funNode, lines, 0);
+        var generated = lines.join("\n");
+        output.push(generated);
+        output.push("");
+    }
+
+    function generateFunctionTree(fun) {
+        var drakonJson = JSON.stringify(fun, null, 4);
+        var treeStr = options.toTree(
+            drakonJson,
+            fun.name,
+            fun.path,
+            options.language,
+        );
+        var tree = JSON.parse(treeStr);
+        return tree;
+    }
+
+    async function cljPreprosess() {
+        var rootFolder = await options.getObjectByHandle(options.root);
+        for (var childPath of rootFolder.children) {
+            var child = await options.getObjectByHandle(childPath);
+            if (!child) {
+                continue;
+            }
+            if (isModule(child)) {
+                project.moduleInit = child;
+            } else {
+                await traverseModuleItem(child);
+            }
+        }
+    }
+
+    function stop() {
+        state = undefined;
+    }
+    async function run() {
+        if (state !== "idle") {
+            throw new Error("Invalid state " + state);
+        }
+        try {
+            await cljPreprosess();
+            var src = generateSourceCode();
+            await options.onData(src);
+        } catch (ex) {
+            if (ex.cancelled) {
+                reportError("Cancelled by user");
+            } else {
+                options.onError(ex);
+            }
+        }
+    }
+
+    var self = {};
+    self.stop = stop;
+    self.run = run;
+    return self;
+}
+
+function createDrakonTechGenerator(options) {
+    var gAsts = {};
+    var gBranches = {};
+    var simpleSilhouette;
+    var nextId = 2;
+    var self = {};
+    var state = "idle";
+    var scopes = {};
+    var project = createScope(options.name, "module");
+    var failed = false;
+
+    function generateId(prefix) {
+        var id = prefix + "_" + nextId;
+        nextId++;
+        return id;
+    }
+
+    function stop() {
+        state = undefined;
+    }
+
+    function createScope(name, type, parent) {
+        var scope = {
+            name: name,
+            type: type,
+            parent: parent,
+            args: {},
+            declared: {},
+            auto: {},
+            loop: {},
+            algoprops: {},
+            functions: {},
+            classes: {},
+            computes: {},
+            assignments: {},
+        };
+        scopes[name] = scope;
+        return scope;
+    }
+
+    async function readChildren(folder) {
+        var result = [];
+        for (var filepath of folder.children) {
+            var child = await options.getObjectByHandle(filepath);
+            if (child) {
+                result.push(child);
+            }
+        }
+        return result;
+    }
+
+    function isModule(folder) {
+        return folder.type === "drakon" && folder.name === "module";
+    }
+
+    function isClass(folder) {
+        return (
+            (folder.type === "drakon" && folder.name === "class") ||
+            folder.isCtr
+        );
+    }
+
+    function isFunction(folder) {
+        if (folder.type === "drakon") {
+            if (folder.keywords) {
+                if (folder.keywords.function === false) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    function isMachine(folder) {
+        if (folder.type === "drakon") {
+            if (folder.keywords) {
+                return folder.keywords.machine;
+            }
+        }
+        return false;
+    }
+
+    function isAlgoprop(folder) {
+        return (
+            folder.type === "drakon" &&
+            folder.keywords &&
+            folder.keywords.algoprop
+        );
+    }
+
+    function isAsync(folder) {
+        return (
+            folder.type === "drakon" && folder.keywords && folder.keywords.async
+        );
+    }
+
+    function createFunctionScope(folder, type, scopeName, parentScope) {
+        if (scopeName in scopes) {
+            reportError(
+                "Name is not unique",
+                folder.path,
+                undefined,
+                scopeName,
+            );
+        }
+        folder.scope = createScope(scopeName, type, parentScope);
+    }
+
+    function addFunction(scope, folder, scopeName, parentScope) {
+        if (verbose) {
+            console.log("addFunction", scope.name, folder.name, folder.path);
+        }
+        var name = folder.name;
+        createFunctionScope(folder, "function", scopeName, parentScope);
+        scope.functions[name] = folder;
+    }
+
+    function addAlgoprop(scope, folder, scopeName, parentScope) {
+        if (verbose) {
+            console.log("addAlgoprop", scope.name, folder.name, folder.path);
+        }
+        var name = folder.name;
+        createFunctionScope(folder, "algoprop", scopeName, parentScope);
+        scope.algoprops[name] = folder;
+    }
+
+    function addClass(name, path, ctr) {
+        if (verbose) {
+            console.log("addClass", name, path);
+        }
+        createFunctionScope(ctr, "class", name, project.name);
+        ctr.scope.allowDeclare = true;
+        ctr.isCtr = true;
+        ctr.name = name;
+        project.classes[name] = ctr;
+    }
+
+    function addMachine(folder) {
+        if (verbose) {
+            console.log("addMachine", folder.name, folder.path);
+        }
+        buildMachine(folder);
+    }
+
+    function buildMachine(folder) {
+        if (!folder.items) {
+            folder.items = {};
+        }
+        var ctr = createFunctionObject(
+            folder.name,
+            folder.params,
+            folder.keywords,
+            folder.path,
+        );
+        var inputs = {};
+        ctr.keywords.function = true;
+        ctr.keywords.machine = false;
+        addClass(folder.name, folder.path, ctr);
+        var firstItemId = collectInputs(folder, inputs);
+        if (!firstItemId) {
+            return;
+        }
+        var br = folder.items[firstItemId];
+        cutOutSubprogram(folder, br.one, ctr);
+        for (var name in inputs) {
+            var input = inputs[name];
+            createHandler(ctr.scope, input, folder);
+        }
+        ctr.machine = {
+            inputs: inputs,
+        };
+    }
+
+    function setBranchName(items, id, visited, branchName) {
+        if (!id) {
+            return;
+        }
+        if (id in visited) {
+            return;
+        }
+        visited[id] = true;
+        var item = items[id];
+        if (item.type === "branch") {
+            var fallback = "branch_" + item.branchId;
+            branchName = extractGoodSymbols(item.content, fallback);
+        }
+        item.branchName = branchName;
+        setBranchName(items, item.one, visited, branchName);
+        setBranchName(items, item.two, visited, branchName);
+    }
+
+    function createHandlerName(input, obj) {
+        var name = obj.branchName + "_" + input.name;
+        return replace(name, "__", "_");
+    }
+
+    function createStateName(branchName, id) {
+        return branchName;
+    }
+
+    function createHandler(scope, input, folder) {
+        for (var obj of input.items) {
+            var name = createHandlerName(input, obj);
+            var fun = createFunctionObject(
+                name,
+                input.params,
+                { function: true },
+                folder.path,
+            );
+            var startItem = folder.items[obj.to];
+            cutOutSubprogram(folder, startItem.one, fun);
+            var scopeName = folder.name + "." + name;
+            addFunction(scope, fun, scopeName, scope.name);
+        }
+    }
+
+    function collectInputs(folder, inputs) {
+        var branches = [];
+        for (var id in folder.items) {
+            var item = folder.items[id];
+            item.id = id;
+            if (item.type === "branch") {
+                branches.push(item);
+            }
+        }
+        if (branches.length === 0) {
+            return undefined;
+        }
+        sortBy(branches, "branchId");
+        var firstItemId = branches[0].id;
+        var visited = {};
+        var branchesVisited = {};
+        setBranchName(folder.items, firstItemId, visited, "");
+        for (var id in folder.items) {
+            var item = folder.items[id];
+            if (isReceive(item)) {
+                if (!checkOneInputPerBranch(folder, item, branchesVisited)) {
+                    return undefined;
+                }
+                collectInputsFromReceive(folder, inputs, item);
+            } else if (item.type === "sinput") {
+                if (!checkOneInputPerBranch(folder, item, branchesVisited)) {
+                    return undefined;
+                }
+                collectInputsFromSInput(folder, inputs, item, item.id);
+            }
+        }
+        return firstItemId;
+    }
+
+    function checkOneInputPerBranch(folder, item, branchesVisited) {
+        if (item.branchName in branchesVisited) {
+            reportError(
+                "Only one input or receive is allowed on one silhouette branch",
+                folder.path,
+                item.id,
+            );
+            return false;
+        }
+        branchesVisited[item.branchName] = true;
+        return true;
+    }
+
+    function isReceive(item) {
+        return item.type === "select" && item.content === "receive";
+    }
+
+    function cutOutSubprogram(folder, firstItemId, targetFun) {
+        var startBranch = {
+            type: "branch",
+            content: "_start_",
+            id: generateId("mi"),
+            branchId: 0,
+            one: firstItemId,
+        };
+        targetFun.items[startBranch.id] = startBranch;
+        var visited = {};
+        visited[startBranch.id] = true;
+        copyNode(folder, firstItemId, visited, targetFun);
+    }
+
+    function copyNode(folder, itemId, visited, targetFun) {
+        if (!itemId) {
+            return;
+        }
+        if (itemId in visited) {
+            return;
+        }
+        visited[itemId] = true;
+        var item = folder.items[itemId];
+        if (item.type === "sinput" || isReceive(item)) {
+            var stopItem = {
+                id: itemId,
+                type: "action",
+                content:
+                    'self.state = "' +
+                    createStateName(item.branchName, item.id) +
+                    '"',
+            };
+            targetFun.items[itemId] = stopItem;
+            return;
+        }
+        if (item.type === "branch") {
+            branchName = extractGoodSymbols(item.content, "");
+        }
+        var copy = clone(item);
+        if (copy.type === "end") {
+            copy.type = "action";
+            copy.content = "self.state = undefined";
+        }
+        targetFun.items[itemId] = copy;
+        copyNode(folder, item.one, visited, targetFun);
+        copyNode(folder, item.two, visited, targetFun);
+    }
+
+    function isGoodSymbol(code) {
+        if (code >= 48 && code <= 57) {
+            return true;
+        }
+
+        // Check for uppercase letters (A-Z)
+        if (code >= 65 && code <= 90) {
+            return true;
+        }
+
+        // Check for lowercase letters (a-z)
+        if (code >= 97 && code <= 122) {
+            return true;
+        }
+
+        // Check for underscore (_)
+        if (code === 95) {
+            return true;
+        }
+        return false;
+    }
+
+    function extractGoodSymbols(content, fallback) {
+        content = content || "";
+        var result = "";
+        // Iterate through each character in the string
+        for (let i = 0; i < content.length; i++) {
+            var char = content[i];
+            const code = content.charCodeAt(i);
+            if (isGoodSymbol(code)) {
+                result += char;
+            }
+        }
+        return result || fallback;
+    }
+
+    function collectInputsFromReceive(folder, inputs, item) {
+        var id = item.one;
+        while (id) {
+            var caseItem = folder.items[id];
+            collectInputsFromSInput(folder, inputs, caseItem, item.id);
+            id = caseItem.two;
+        }
+    }
+
+    function extractInput(folder, item, fromId) {
+        if (!item.content) {
+            reportError(
+                "An input signature is expected here",
+                folder.path,
+                item.id,
+            );
+            return undefined;
+        }
+
+        var ast;
+        try {
+            ast = options.esprima.parseScript(item.content);
+        } catch (ex) {
+            reportError(ex.message, folder.path, item.id);
+            return undefined;
+        }
+        var result = getCall(ast.body[0]);
+        if (!result) {
+            reportError(
+                "A call expression expected here",
+                folder.path,
+                item.id,
+            );
+            return undefined;
+        }
+        addInputItem(result, fromId, item);
+        return result;
+    }
+
+    function addInputItem(result, fromId, item) {
+        result.items.push({
+            from: fromId,
+            branchName: item.branchName,
+            to: item.id,
+        });
+    }
+
+    function getCall(ast) {
+        if (ast.type === "ExpressionStatement") {
+            var expr = ast.expression;
+            if (expr.type === "CallExpression") {
+                if (expr.callee.type === "Identifier") {
+                    var name = expr.callee.name;
+                    var result = {
+                        name: name,
+                        arguments: [],
+                        signature: "",
+                        items: [],
+                    };
+                    for (var arg of expr.arguments) {
+                        if (arg.type === "Identifier") {
+                            result.arguments.push(arg.name);
+                        } else {
+                            return undefined;
+                        }
+                    }
+                    result.signature =
+                        name + "(" + result.arguments.join(",") + ")";
+                    result.params = result.arguments.join("\n");
+                    return result;
+                }
+            }
+        }
+        return undefined;
+    }
+
+    function collectInputsFromSInput(folder, inputs, item, fromId) {
+        var input = extractInput(folder, item, fromId);
+        if (input) {
+            var existing = inputs[input.name];
+            if (existing) {
+                if (existing.signature === input.signature) {
+                    addInputItem(existing, fromId, item);
+                } else {
+                    reportError(
+                        "Incompatible input signatures",
+                        folder.path,
+                        item.id,
+                    );
+                }
+            } else {
+                inputs[input.name] = input;
+            }
+        }
+    }
+
+    function createFunctionObject(name, params, keywords, path) {
+        var result = {
+            name: name,
+            type: "drakon",
+            params: params,
+            keywords: {},
+            items: {},
+            path: path,
+        };
+        if (keywords) {
+            Object.assign(result.keywords, keywords);
+        }
+        return result;
+    }
+
+    function addDeclaration(scope, name) {
+        scope.declared[name] = true;
+    }
+
+    function addAssigned(scope, name) {
+        scope.assignments[name] = true;
+    }
+
+    function addArgument(fun, name) {
+        fun.arguments.push(name);
+        if (name in fun.scope.declared) {
+            reportError(
+                "Argument name is not unique",
+                fun.path,
+                "params",
+                name,
+            );
+        }
+        addDeclaration(fun.scope, name);
+    }
+
+    function checkCancellation() {
+        if (!state) {
+            var error = new Error("Cancelled");
+            error.cancelled = true;
+            throw error;
+        }
+    }
+    async function traverseModuleItem(folder) {
+        if (verbose) {
+            console.log("traverseModuleItem", folder.path);
+        }
+        checkCancellation();
+        if (folder.type === "folder") {
+            var children = await readChildren(folder);
+            var ctr = findFirst(children, isClass);
+            if (ctr) {
+                addClass(folder.name, folder.path, ctr);
+                for (var child of children) {
+                    await traverseClassItem(ctr, child, true);
+                }
+            } else {
+                for (var child of children) {
+                    await traverseModuleItem(child);
+                }
+            }
+        } else if (isModule(folder)) {
+            reportError("module not expected here", folder.path);
+        } else if (isFunction(folder)) {
+            addFunction(project, folder, folder.name, project.name);
+        } else if (isAlgoprop(folder)) {
+            addAlgoprop(project, folder, folder.name, project.name);
+        } else if (isMachine(folder)) {
+            addMachine(folder);
+        }
+    }
+
+    async function traverseClassItem(ctr, folder, classAllowed) {
+        if (verbose) {
+            console.log("traverseClassItem", folder.path);
+        }
+        checkCancellation();
+        var scope = ctr.scope;
+        if (folder.type === "folder") {
+            var children = await readChildren(folder);
+            for (var child of children) {
+                await traverseClassItem(ctr, child, false);
+            }
+        } else if (isClass(folder)) {
+            if (!classAllowed) {
+                reportError("class not expected here", folder.path);
+            }
+        } else if (isModule(folder)) {
+            reportError("module not expected here", folder.path);
+        } else if (isFunction(folder)) {
+            var scopeName = ctr.name + "." + folder.name;
+            addFunction(scope, folder, scopeName, ctr.name);
+        } else if (isAlgoprop(folder)) {
+            var scopeName = ctr.name + "." + folder.name;
+            addAlgoprop(scope, folder, scopeName, ctr.name);
+        } else if (isMachine(folder)) {
+            reportError(
+                "state machines are not allowed in classes",
+                folder.path,
+            );
+        }
+    }
+
+    async function jsPreprocess() {
+        var rootFolder = await options.getObjectByHandle(options.root);
+        for (var childPath of rootFolder.children) {
+            var child = await options.getObjectByHandle(childPath);
+            if (!child) {
+                continue;
+            }
+            if (isClass(child)) {
+                reportError("class not expected in the root folder", childPath);
+            } else if (isModule(child)) {
+                project.moduleInit = child;
+            } else {
+                await traverseModuleItem(child);
+            }
+        }
+
+        if (project.moduleInit) {
+            parseItemsCore(project.moduleInit, parseNormal);
+        }
+
+        parseFunctions(project.functions);
+        parseFunctions(project.algoprops);
+
+        for (var name in project.classes) {
+            parseClassItems(project.classes[name]);
+        }
+    }
+
+    function buildAsts() {
+        if (project.moduleInit) {
+            buildAst(project.moduleInit);
+        }
+        buildAstsInFunctions(project.functions);
+        buildAstsInFunctions(project.algoprops);
+        for (var name in project.classes) {
+            buildClassAst(project.classes[name]);
+        }
+    }
+
+    function createFunction(name, args) {
+        if (!args) {
+            args = [];
+        }
+        return {
+            type: "FunctionDeclaration",
+            id: createIdentifier(name),
+            params: args.map(createIdentifier),
+            body: createBlock(),
+            generator: false,
+            expression: false,
+            async: false,
+        };
+    }
+
+    function createBlock() {
+        return {
+            type: "BlockStatement",
+            body: [],
+        };
+    }
+
+    function addActionToAst(step, body) {
+        if (!step.content) {
+            return;
+        }
+        for (var expr of step.content) {
+            body.push(expr);
+        }
+    }
+
+    function createNot(operand) {
+        return {
+            type: "UnaryExpression",
+            operator: "!",
+            argument: operand,
+        };
+    }
+
+    function createOr(left, right) {
+        return {
+            type: "LogicalExpression",
+            operator: "||",
+            left: left,
+            right: right,
+        };
+    }
+
+    function createAnd(left, right) {
+        return {
+            type: "LogicalExpression",
+            operator: "&&",
+            left: left,
+            right: right,
+        };
+    }
+
+    function createEqual(left, right) {
+        return {
+            type: "BinaryExpression",
+            operator: "===",
+            left: left,
+            right: right,
+        };
+    }
+
+    function decodeQuestionContent(content) {
+        if (content.operator === "not") {
+            var decoded = decodeQuestionContent(content.operand);
+            if (
+                decoded.type === "BinaryExpression" &&
+                decoded.operator === "==="
+            ) {
+                decoded.operator = "!==";
+                return decoded;
+            }
+            return createNot(decodeQuestionContent(content.operand));
+        }
+
+        if (content.operator === "and") {
+            var left = decodeQuestionContent(content.left);
+            var right = decodeQuestionContent(content.right);
+            return createAnd(left, right);
+        }
+
+        if (content.operator === "or") {
+            var left = decodeQuestionContent(content.left);
+            var right = decodeQuestionContent(content.right);
+            return createOr(left, right);
+        }
+
+        if (content.operator === "equal") {
+            var left = decodeQuestionContent(content.left);
+            var right = decodeQuestionContent(content.right);
+            return createEqual(left, right);
+        }
+
+        return content;
+    }
+
+    function addQuestionToAst(step, body) {
+        var content = decodeQuestionContent(step.content);
+        var node = createIfNode(content);
+        convertNodesToAst(step.yes, node.consequent.body);
+        if (step.no.length > 0) {
+            node.alternate = createBlock();
+            convertNodesToAst(step.no, node.alternate.body);
+        }
+        body.push(node);
+    }
+
+    function createIfNode(content) {
+        return {
+            type: "IfStatement",
+            test: content,
+            consequent: createBlock(),
+        };
+    }
+
+    function addLoopToAst(step, body) {
+        var node;
+        if (step.content) {
+            node = step.content;
+        } else {
+            node = createWhileTrue();
+        }
+        convertNodesToAst(step.body, node.body.body);
+        body.push(node);
+    }
+
+    function createWhileTrue() {
+        return {
+            type: "WhileStatement",
+            test: {
+                type: "Literal",
+                value: true,
+                raw: "true",
+            },
+            body: createBlock(),
+        };
+    }
+
+    function createThrow(message) {
+        return {
+            type: "ThrowStatement",
+            argument: {
+                type: "NewExpression",
+                callee: createIdentifier("Error"),
+                arguments: [message],
+            },
+        };
+    }
+
+    function createPlus(left, right) {
+        return {
+            type: "BinaryExpression",
+            operator: "+",
+            left: left,
+            right: right,
+        };
+    }
+
+    function createStringLiteral(value) {
+        return {
+            type: "Literal",
+            value: value,
+            raw: JSON.stringify(value),
+        };
+    }
+
+    function addErrorToAst(step, body) {
+        var message;
+        if (step.content) {
+            message = createPlus(
+                createStringLiteral(step.message + ": "),
+                step.content,
+            );
+        } else {
+            message = createStringLiteral(step.message);
+        }
+        var expr = createThrow(message);
+        body.push(expr);
+    }
+
+    function createBreak() {
+        return {
+            type: "BreakStatement",
+            label: null,
+        };
+    }
+
+    function addAddressToAst(step, body) {
+        if (simpleSilhouette) {
+            var nextBranch = gBranches[step.content];
+            convertNodesToAst(nextBranch.body, body);
+        } else {
+            var assi = createAssignment(
+                createIdentifier("_state_"),
+                createStringLiteral(step.content),
+            );
+            var statement = createExpression(assi);
+            body.push(statement);
+        }
+    }
+
+    function convertNodesToAst(steps, body) {
+        for (var step of steps) {
+            if (step.type === "action") {
+                addActionToAst(step, body);
+            } else if (step.type === "question") {
+                addQuestionToAst(step, body);
+            } else if (step.type === "loop") {
+                addLoopToAst(step, body);
+            } else if (step.type === "error") {
+                addErrorToAst(step, body);
+            } else if (step.type === "break") {
+                body.push(createBreak());
+            } else if (step.type === "address") {
+                addAddressToAst(step, body);
+            } else {
+                throw new Error("Unexpected step type: " + step.type);
+            }
+        }
+    }
+
+    function treeToAst(fun, tree) {
+        var funAst = createFunction(fun.name, fun.arguments);
+        if (fun.keywords && fun.keywords.async) {
+            funAst.async = true;
+        }
+
+        var functionBody = funAst.body.body;
+        if (tree.branches.length === 0) {
+            return funAst;
+        } else if (tree.branches.length === 1) {
+            convertNodesToAst(tree.branches[0].body, functionBody);
+        } else {
+            gBranches = {};
+            for (var branch of tree.branches) {
+                if (!branch.name) {
+                    reportError(
+                        "Branch name cannot be empty",
+                        fun.path,
+                        branch.id,
+                    );
+                    return funAst;
+                }
+                if (branch.name in gBranches) {
+                    reportError("Non-unique branch name", fun.path, branch.id);
+                    return funAst;
+                }
+                gBranches[branch.name] = branch;
+            }
+            if (isSimpleSilhouette(tree.branches)) {
+                simpleSilhouette = true;
+                convertNodesToAst(tree.branches[0].body, functionBody);
+            } else {
+                simpleSilhouette = false;
+                var firstName = tree.branches[0].name;
+                functionBody.push(
+                    createExpression(
+                        createAssignment(
+                            createIdentifier("_state_"),
+                            createStringLiteral(firstName),
+                        ),
+                    ),
+                );
+                var loop = createWhileTrue();
+                functionBody.push(loop);
+                var loopBody = loop.body.body;
+                var select = createSwitch(createIdentifier("_state_"));
+                loopBody.push(select);
+                var ordinal = 0;
+                for (var branch of tree.branches) {
+                    var caseClause = createCase(
+                        createStringLiteral(branch.name),
+                    );
+                    select.cases.push(caseClause);
+                    var caseBody = caseClause.consequent;
+                    var lastBranch =
+                        ordinal === tree.branches.length - 1 && hasEnd(fun);
+                    if (lastBranch) {
+                        var assi = createAssignment(
+                            createIdentifier("_state_"),
+                            createIdentifier("undefined"),
+                        );
+                        caseBody.push(createExpression(assi));
+                    }
+                    convertNodesToAst(branch.body, caseBody);
+                    if (!endsWithReturn(caseBody)) {
+                        caseBody.push(createBreak());
+                    }
+                    ordinal++;
+                }
+                var defClause = createCase(null);
+                defClause.consequent.push(createReturn(null));
+                select.cases.push(defClause);
+            }
+        }
+        return funAst;
+    }
+
+    function endsWithReturn(caseBody) {
+        if (caseBody.length === 0) {
+            return false;
+        }
+        var last = caseBody[caseBody.length - 1];
+        return (
+            last.type === "ReturnStatement" || last.type === "ThrowStatement"
+        );
+    }
+
+    function hasEnd(fun) {
+        for (var id in fun.items) {
+            var item = fun.items[id];
+            if (item.type === "end") {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function createReturn(value) {
+        return {
+            type: "ReturnStatement",
+            argument: value,
+        };
+    }
+
+    function createSwitch(value) {
+        return {
+            type: "SwitchStatement",
+            discriminant: value,
+            cases: [],
+        };
+    }
+
+    function createCase(value) {
+        return {
+            type: "SwitchCase",
+            test: value,
+            consequent: [],
+        };
+    }
+
+    function isSimpleSilhouette(branches) {
+        for (var i = 0; i < branches.length; i++) {
+            var branch = branches[i];
+            if (branch.refs > 1) {
+                if (i === branches.length - 1) {
+                    return simpleBranch(branch);
+                }
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function simpleBranch(branch) {
+        if (branch.body.length === 1) {
+            if (branch.body[0].type === "action") {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function putAst(fun, ast) {
+        var key = getAstId(fun);
+        gAsts[key] = ast;
+    }
+
+    function getAstId(fun) {
+        if (fun.scope) {
+            return fun.scope.name;
+        }
+        return "module";
+    }
+
+    function getAst(fun) {
+        var key = getAstId(fun);
+        return gAsts[key];
+    }
+
+    function buildAst(fun) {
+        var ast;
+        try {
+            var drakonJson = JSON.stringify(fun, null, 4);
+            var treeStr = options.toTree(
+                drakonJson,
+                fun.name,
+                fun.path,
+                options.language,
+            );
+            var tree = JSON.parse(treeStr);
+            var ast = treeToAst(fun, tree);
+            if (verbose) {
+                try {
+                    options.escodegen.generate(ast);
+                } catch (ex) {
+                    console.log(ex.message);
+                    console.log(fun.name, fun.path);
+                    console.log(JSON.stringify(ast, null, 4));
+                    reportError("Internal error", fun.path);
+                    ast = createIdentifier("error");
+                }
+            }
+            putAst(fun, ast);
+        } catch (ex) {
+            console.log(ex);
+            reportError(ex.message, fun.path, ex.nodeId);
+        }
+    }
+
+    function buildClassAst(cls) {
+        buildAst(cls);
+        var scope = cls.scope;
+        buildAstsInFunctions(scope.functions);
+        buildAstsInFunctions(scope.algoprops);
+    }
+
+    function buildAstsInFunctions(functions) {
+        for (var name in functions) {
+            var fun = functions[name];
+            buildAst(fun);
+        }
+    }
+
+    function isExported(fun) {
+        return fun.keywords && fun.keywords.export;
+    }
+
+    function parseParams(params) {
+        params = params || "";
+        var parts = params.split("\n");
+        return parts.map((part) => part.trim()).filter((part) => !!part);
+    }
+
+    function parseNormal(content, itemId) {
+        var wrapped = "async function _wpd_() {" + content + "\n}";
+        var parsed = options.esprima.parseScript(wrapped, { loc: false });
+        var result = parsed.body[0].body.body;
+        result.forEach((node) => {
+            node.itemId = itemId;
+        });
+        return result;
+    }
+
+    function parseItemContent(fun, item, parser) {
+        var content = item.content || "";
+        content = content.trim();
+        if (content) {
+            try {
+                item.content = parser(content, item.id);
+            } catch (ex) {
+                reportError(ex.message, fun.path, item.id);
+                delete item.content;
+            }
+        } else {
+            delete item.content;
+        }
+    }
+
+    function ensureHasContent(fun, item) {
+        if (!item.content || item.content.length === 0) {
+            reportError("Icon cannot be empty", fun.path, item.id);
+            return false;
+        }
+        return true;
+    }
+
+    function ensureExpression(fun, item) {
+        var expression = getExpression(item);
+        if (!expression) {
+            reportError(
+                "A value expression is expected here",
+                fun.path,
+                item.id,
+            );
+            return false;
+        }
+        item.content = expression;
+        return true;
+    }
+    function getExpression(item) {
+        if (!item.content) {
+            return undefined;
+        }
+        if (item.content.length !== 1) {
+            return undefined;
+        }
+        var expr = item.content[0];
+        if (expr.type === "ExpressionStatement") {
+            if (expr.expression.type === "AssignmentExpression") {
+                return undefined;
+            }
+            if (expr.expression.type === "SequenceExpression") {
+                return undefined;
+            }
+            return expr.expression;
+        }
+
+        return undefined;
+    }
+
+    function addFunctionParamsToScope(scope, node) {
+        if (node.params) {
+            for (var param of node.params) {
+                if (param.type === "Identifier") {
+                    addDeclaration(scope, param.name);
+                }
+            }
+        }
+    }
+
+    function isDeclaration(parentNode, property) {
+        if (property === "dec") {
+            return true;
+        }
+        if (parentNode.type === "VariableDeclarator" && property === "id") {
+            return true;
+        }
+        return false;
+    }
+
+    function isNeutral(parentNode, property) {
+        if (property === "params") {
+            return true;
+        }
+        if (property === "left" && parentNode.type === "ForInStatement") {
+            return true;
+        }
+        if (property === "left" && parentNode.type === "ForOfStatement") {
+            return true;
+        }
+        return false;
+    }
+
+    function getObjectTypeDeep(scope, name) {
+        var sname = scope.name;
+        while (sname) {
+            var current = scopes[sname];
+            var type = getObjectType(current, name);
+            if (type) {
+                return type;
+            }
+            sname = current.parent;
+        }
+        return undefined;
+    }
+
+    function getObjectType(scope, name) {
+        if (name in scope.classes) {
+            return "class";
+        }
+        if (name in scope.functions) {
+            return "function";
+        }
+        if (name in scope.algoprops) {
+            return "algoprop";
+        }
+        if (name in scope.loop) {
+            return "loop";
+        }
+
+        return undefined;
+    }
+
+    function checkCanWriteTo(context, name, itemId, parentNode) {
+        var type = getObjectTypeDeep(context.scope, name);
+        if (type === "class") {
+            reportError(
+                "Cannot write to class definition",
+                context.fun.path,
+                itemId,
+            );
+        } else if (type === "function") {
+            reportError(
+                "Cannot write to function definition",
+                context.fun.path,
+                itemId,
+            );
+        } else if (type === "algoprop") {
+            reportError(
+                "Cannot write to algo-prop definition",
+                context.fun.path,
+                itemId,
+            );
+        } else if (type === "loop") {
+            if (!parentNode.loopInternal) {
+                reportError(
+                    "Cannot write to a loop variable",
+                    context.fun.path,
+                    itemId,
+                );
+            }
+        }
+    }
+
+    function isLazy(algo) {
+        return algo.keywords && algo.keywords.lazy;
+    }
+
+    function isOwnEagerProperty(context, name) {
+        var algo = getOwnAlgoprop(context.fun, name);
+        if (algo) {
+            if (!isLazy(algo)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function getComputeArgument(node) {
+        if (node.type === "CallExpression") {
+            var callee = node.callee;
+            if (callee.type === "Identifier" && callee.name === "compute") {
+                var args = node.arguments;
+                if (args.length === 1) {
+                    var arg = args[0];
+                    if (arg.type === "Identifier") {
+                        return arg.name;
+                    }
+                }
+            }
+        }
+        return undefined;
+    }
+
+    function getOwnAlgoprop(fun, name) {
+        var scope = getParentScope(fun);
+        return scope.algoprops[name];
+    }
+
+    function getParentScope(fun) {
+        if (fun.scope.parent) {
+            return scopes[fun.scope.parent];
+        } else {
+            return fun.scope;
+        }
+    }
+
+    function computeAllowed(context, itemId, computeArg) {
+        var algo = getOwnAlgoprop(context.fun, computeArg);
+        if (algo) {
+            if (isLazy(algo)) {
+                return true;
+            } else if (!isAlgoprop(context.fun)) {
+                return true;
+            } else {
+                reportError(
+                    "Cannot compute a non-lazy algoprop inside an algoprop",
+                    context.fun.path,
+                    itemId,
+                );
+                return false;
+            }
+        }
+        reportError("Can compute only own algoprops", context.fun.path, itemId);
+        return false;
+    }
+
+    function firstPass(fun, scope) {
+        var context = {
+            fun: fun,
+            scope: scope,
+        };
+        var self = {};
+        self.visit = function (node, itemId, parentNode, property) {
+            if (
+                node.type === "ArrowFunctionExpression" ||
+                node.type === "FunctionExpression"
+            ) {
+                var name = generateId("scope");
+                node.scope = createScope(name, node.type, scope.name);
+                addFunctionParamsToScope(node.scope, node);
+                return firstPass(fun, node.scope);
+            } else if (node.type === "Identifier") {
+                if (isDeclaration(parentNode, property)) {
+                    if (!scope.allowDeclare) {
+                        reportError(
+                            "Variable declarations allowed only in module and class constructors",
+                            fun.path,
+                            itemId,
+                        );
+                        return self;
+                    }
+                    addDeclaration(scope, node.name);
+                }
+                if (isNeutral(parentNode, property)) {
+                    return self;
+                }
+                if (isAlgoprop(fun) && isOwnEagerProperty(context, node.name)) {
+                    fun.dependencies[node.name] = true;
+                }
+                if (parentNode.type === "UpdateExpression") {
+                    checkCanWriteTo(context, node.name, itemId, parentNode);
+                } else if (
+                    parentNode.type === "AssignmentExpression" &&
+                    property === "left"
+                ) {
+                    checkCanWriteTo(context, node.name, itemId, parentNode);
+                    addAssigned(context.scope, node.name);
+                }
+            } else {
+                var computeArg = getComputeArgument(node);
+                if (computeArg) {
+                    if (computeAllowed(context, itemId, computeArg)) {
+                        var pscope = getParentScope(fun);
+                        pscope.computes[computeArg] = true;
+                    }
+                }
+            }
+            return self;
+        };
+        return self;
+    }
+
+    function secondPass(fun, scope) {
+        var self = {};
+        self.visit = function (node, itemId, parentNode, property) {
+            if (
+                node.type === "ArrowFunctionExpression" ||
+                node.type === "FunctionExpression"
+            ) {
+                if (node.body.type === "BlockStatement") {
+                    addVariableDeclarationsCore(node.scope, node.body.body);
+                }
+                return secondPass(fun, node.scope);
+            } else if (node.type === "FunctionDeclaration") {
+                addVariableDeclarationsCore(scope, node.body.body);
+            } else {
+                var computeArg = getComputeArgument(node);
+                if (computeArg) {
+                    node.callee.name = buildComputeName(computeArg);
+                    node.arguments = [];
+                    var pscope = getParentScope(fun);
+                    var compAst = pscope.computeFunctions[computeArg];
+                    if (
+                        compAst &&
+                        compAst.async &&
+                        parentNode.type !== "AwaitExpression"
+                    ) {
+                        node.type = "AwaitExpression";
+                        node.argument = createCall(
+                            createIdentifier(buildComputeName(computeArg)),
+                        );
+                        delete node.callee;
+                        delete node.arguments;
+                    }
+                }
+            }
+            return self;
+        };
+        return self;
+    }
+
+    function parseActionContent(fun, item, parser) {
+        parseItemContent(fun, item, parser);
+    }
+
+    function parseSOutputContent(fun, item, parser) {
+        if (item.content) {
+            item.content = "setTimeout(() => {" + item.content + "}, 0);";
+        }
+        item.type = "action";
+        parseItemContent(fun, item, parser);
+    }
+
+    function addLoopVar(scope, variable) {
+        scope.loop[variable] = true;
+        scope.auto[variable] = true;
+    }
+
+    function createForOf(variable, collectionExpr) {
+        return {
+            type: "ForOfStatement",
+            left: createIdentifier(variable),
+            right: collectionExpr,
+            body: createBlock(),
+        };
+    }
+
+    function createForIn(variable, collectionExpr) {
+        return {
+            type: "ForInStatement",
+            left: createIdentifier(variable),
+            right: collectionExpr,
+            body: createBlock(),
+            each: false,
+        };
+    }
+
+    function createFor(init, test, update) {
+        return {
+            type: "ForStatement",
+            init: init,
+            test: test,
+            update: update,
+            body: {
+                type: "BlockStatement",
+                body: [],
+            },
+        };
+    }
+
+    function createGetValue(valueVar, keyVar, collection) {
+        return {
+            type: "AssignmentExpression",
+            operator: "=",
+            left: createIdentifier(valueVar),
+            right: {
+                type: "MemberExpression",
+                computed: true,
+                object: collection,
+                property: createIdentifier(keyVar),
+            },
+            loopInternal: true,
+        };
+    }
+
+    function createExpression(expression) {
+        return {
+            type: "ExpressionStatement",
+            expression: expression,
+        };
+    }
+
+    function insertActionBefore(fun, beforeId, expression) {
+        var id = generateId("_item_");
+        var item = {
+            id: id,
+            type: "action",
+            content: [createExpression(expression)],
+            one: beforeId,
+        };
+
+        for (var itemId in fun.items) {
+            var existingItem = fun.items[itemId];
+            if (existingItem.one === beforeId) {
+                existingItem.one = id;
+            }
+            if (existingItem.two === beforeId) {
+                existingItem.two = id;
+            }
+        }
+
+        fun.items[id] = item;
+    }
+
+    function parseLoopContent(fun, item, parser) {
+        parseItemContent(fun, item, parser);
+        if (ensureHasContent(fun, item)) {
+            switch (item.content.length) {
+                case 2:
+                    var expr1 = item.content[0];
+                    var expr2 = item.content[1];
+                    if (
+                        expr1.type !== "ExpressionStatement" ||
+                        expr2.type !== "ExpressionStatement"
+                    ) {
+                        reportBadLoop(fun, item);
+                        return;
+                    }
+                    var first = expr1.expression;
+                    var second = expr2.expression;
+                    if (second.type !== "Identifier") {
+                        var varName = generateId("_collection");
+                        var oldContent = second;
+                        second = createIdentifier(varName);
+                        var newContent = createAssignment(
+                            createIdentifier(varName),
+                            oldContent,
+                        );
+                        insertActionBefore(fun, item.id, newContent);
+                    }
+                    if (first.type === "Identifier") {
+                        item.subtype = "array";
+                        item.variable = first.name;
+                        item.content = createForOf(item.variable, second);
+                        item.content.itemId = item.id;
+                        addLoopVar(fun.scope, item.variable);
+                    } else if (first.type === "SequenceExpression") {
+                        if (first.expressions.length !== 2) {
+                            reportBadLoop(fun, item);
+                            return;
+                        } else {
+                            var var1 = first.expressions[0];
+                            var var2 = first.expressions[1];
+                            if (
+                                var1.type !== "Identifier" ||
+                                var2.type !== "Identifier"
+                            ) {
+                                reportBadLoop(fun, item);
+                            } else {
+                                item.subtype = "dictionary";
+                                item.keyVariable = var1.name;
+                                item.valueVariable = var2.name;
+                                insertActionBefore(
+                                    fun,
+                                    item.one,
+                                    createGetValue(
+                                        item.valueVariable,
+                                        item.keyVariable,
+                                        second,
+                                    ),
+                                );
+                                item.content = createForIn(
+                                    item.keyVariable,
+                                    second,
+                                );
+                                item.content.itemId = item.id;
+                                addLoopVar(fun.scope, item.keyVariable);
+                                addLoopVar(fun.scope, item.valueVariable);
+                            }
+                        }
+                    }
+                    break;
+                case 3:
+                    var init = stripExpression(item.content[0]);
+                    var test = stripExpression(item.content[1]);
+                    var update = stripExpression(item.content[2]);
+                    item.content = createFor(init, test, update);
+                    item.content.itemId = item.id;
+                    break;
+                default:
+                    reportBadLoop(fun, item);
+                    break;
+            }
+        }
+    }
+
+    function stripExpression(node) {
+        if (node.type === "ExpressionStatement") {
+            return node.expression;
+        }
+
+        return node;
+    }
+
+    function createIdentifier(name) {
+        return {
+            type: "Identifier",
+            name: name,
+        };
+    }
+
+    function createAssignment(identifier, expression) {
+        return {
+            type: "AssignmentExpression",
+            operator: "=",
+            left: identifier,
+            right: expression,
+        };
+    }
+
+    function createDeclaration(name, expression) {
+        return {
+            type: "VariableDeclaration",
+            declarations: [
+                {
+                    type: "VariableDeclarator",
+                    id: createIdentifier(name),
+                    init: expression,
+                },
+            ],
+            kind: "var",
+        };
+    }
+
+    function createDeclarations(names) {
+        return {
+            type: "VariableDeclaration",
+            declarations: names.map((name) => {
+                return {
+                    type: "VariableDeclarator",
+                    id: createIdentifier(name),
+                    init: null,
+                };
+            }),
+            kind: "var",
+        };
+    }
+
+    function parseSelectContent(fun, item, parser) {
+        parseItemContent(fun, item, parser);
+        if (!ensureHasContent(fun, item)) {
+            return;
+        }
+        if (!ensureExpression(fun, item)) {
+            return;
+        }
+
+        var expr = item.content;
+        if (expr.type !== "Identifier") {
+            var varName = generateId("_selectValue");
+            item.content = createIdentifier(varName);
+            var newContent = createAssignment(createIdentifier(varName), expr);
+            insertActionBefore(fun, item.id, newContent);
+        }
+    }
+
+    function parseCaseContent(fun, item, parser) {
+        parseItemContent(fun, item, parser);
+        if (item.two) {
+            ensureHasContent(fun, item);
+        }
+        if (item.content) {
+            ensureExpression(fun, item);
+        }
+    }
+
+    function parseQuestionContent(fun, item, parser) {
+        parseItemContent(fun, item, parser);
+        if (!ensureHasContent(fun, item)) {
+            return;
+        }
+        ensureExpression(fun, item);
+    }
+
+    function reportBadLoop(fun, item) {
+        reportError("Error in loop icon", fun.path, item.id);
+        delete item.content;
+    }
+
+    function parseFunctionItems(fun) {
+        fun.arguments = [];
+        var params = parseParams(fun.params);
+        params.forEach((param) => addArgument(fun, param));
+        parseItemsCore(fun, parseNormal);
+    }
+
+    function parseClassItems(cls) {
+        if (cls.keywords && cls.keywords.async) {
+            reportError("A class constructor cannot be async", cls.path);
+        }
+        parseFunctionItems(cls);
+
+        var scope = cls.scope;
+        parseFunctions(scope.functions);
+        parseFunctions(scope.algoprops);
+    }
+
+    function parseFunctions(functions) {
+        for (var name in functions) {
+            parseFunctionItems(functions[name]);
+        }
+    }
+
+    function parseItemsCore(fun, parser) {
+        fun.dependencies = {};
+        fun.items = fun.items || {};
+        for (var itemId in fun.items) {
+            var item = fun.items[itemId];
+            item.id = itemId;
+            switch (item.type) {
+                case "action":
+                    parseActionContent(fun, item, parser);
+                    break;
+                case "soutput":
+                    parseSOutputContent(fun, item, parser);
+                    break;
+                case "loopbegin":
+                    parseLoopContent(fun, item, parser);
+                    break;
+                case "select":
+                    parseSelectContent(fun, item, parser);
+                    break;
+                case "case":
+                    parseCaseContent(fun, item, parser);
+                    break;
+                case "question":
+                    parseQuestionContent(fun, item, parser);
+                    break;
+                case "branch":
+                case "comment":
+                case "arrow-loop":
+                case "loopend":
+                case "end":
+                    break;
+                default:
+                    reportError(
+                        "Unsupported icon type",
+                        fun.path,
+                        itemId,
+                        item.type,
+                    );
+                    break;
+            }
+        }
+    }
+
+    function reportError(message, filename, nodeId, data) {
+        failed = true;
+        options.onError({
+            message: message,
+            filename: filename,
+            nodeId: nodeId,
+            data: data,
+        });
+    }
+
+    function createRootNode() {
+        return {
+            type: "Program",
+            body: [],
+            sourceType: "module",
+        };
+    }
+
+    function createDotMember(obj, propertyName) {
+        return {
+            type: "MemberExpression",
+            computed: false,
+            object: obj,
+            property: createIdentifier(propertyName),
+        };
+    }
+
+    function createExportNode(exported) {
+        var properties = exported.map((name) => [
+            createIdentifier(name),
+            createIdentifier(name),
+        ]);
+        return createExpression({
+            type: "AssignmentExpression",
+            operator: "=",
+            left: createDotMember(createIdentifier("module"), "exports"),
+            right: createObjectExpression(properties),
+        });
+    }
+
+    function createInitProperty(key, value) {
+        return {
+            type: "Property",
+            key: key,
+            value: value,
+            computed: false,
+            kind: "init",
+            method: false,
+            shorthand: true,
+        };
+    }
+
+    function createObjectExpression(properties) {
+        return {
+            type: "ObjectExpression",
+            properties: properties.map((prop) =>
+                createInitProperty(prop[0], prop[1]),
+            ),
+        };
+    }
+
+    function buildCalcName(name) {
+        return "_calc_" + name;
+    }
+
+    function buildComputeName(name) {
+        return "_compute_" + name;
+    }
+
+    function addAlgopropCode(scope, body) {
+        var names = Object.keys(scope.algoprops);
+        if (names.length === 0) {
+            return;
+        }
+        names.sort();
+        body.push(createDeclarations(names));
+        for (var name of names) {
+            var algo = scope.algoprops[name];
+            var algoName = buildCalcName(name);
+            var ast = getAst(algo);
+            ast.id.name = algoName;
+            body.push(ast);
+        }
+    }
+
+    function isIife() {
+        return options.settings && options.settings.iife;
+    }
+
+    function generateSourceCode() {
+        var root = createRootNode();
+        if (project.moduleInit) {
+            var modAst = getAst(project.moduleInit);
+            addRange(root.body, modAst.body.body);
+        }
+        addAlgopropCode(project, root.body);
+        var names = Object.keys(project.functions);
+        addRange(names, Object.keys(project.classes));
+        names.sort();
+        var exported = [];
+        for (var name of names) {
+            var fun = project.functions[name] || project.classes[name];
+            var ast = getAst(fun);
+            if (isClass(fun)) {
+                addMembersToClass(fun, ast);
+            }
+            root.body.push(ast);
+            if (isExported(fun)) {
+                exported.push(name);
+            }
+        }
+        addComputes(project, root.body);
+        if (exported.length > 0 && !isIife()) {
+            root.body.push(createExportNode(exported));
+        }
+        var src = options.escodegen.generate(root);
+        if (isIife()) {
+            var iifeExp = generateIife(exported);
+            return "(function() {\n" + src + "\n" + iifeExp + "\n})();";
+        } else {
+            return src;
+        }
+    }
+
+    function generateIife(exported) {
+        return exported
+            .map((name) => "window." + name + " = " + name + ";")
+            .join("\n");
+    }
+
+    function addComputes(scope, body) {
+        var names = Object.keys(scope.computeFunctions);
+        names.sort();
+        for (var name of names) {
+            var ast = scope.computeFunctions[name];
+            body.push(ast);
+        }
+    }
+
+    function addMembersToClass(fun, ast) {
+        var body = ast.body.body;
+        var scope = fun.scope;
+        body.unshift(createDeclaration("self", createObjectExpression([])));
+        addAlgopropCode(scope, body);
+        var names = Object.keys(scope.functions);
+        names.sort();
+        var exported = [];
+        for (var name of names) {
+            var method = scope.functions[name];
+            var ast = getAst(method);
+            body.push(ast);
+            if (isExported(method)) {
+                exported.push(name);
+            }
+        }
+        addComputes(scope, body);
+        for (var name of exported) {
+            addMethodExport(name, body);
+        }
+        addMachineMethods(fun, body);
+        body.push(createReturn(createIdentifier("self")));
+    }
+
+    function addMethodExport(name, body) {
+        body.push(
+            createExpression(
+                createAssignment(
+                    createDotMember(createIdentifier("self"), name),
+                    createIdentifier(name),
+                ),
+            ),
+        );
+    }
+
+    function addMachineMethods(fun, body) {
+        if (fun.machine) {
+            var inputs = Object.keys(fun.machine.inputs);
+            inputs.sort();
+            for (var name of inputs) {
+                var input = fun.machine.inputs[name];
+                addMachineMethod(input, body);
+            }
+            for (var name of inputs) {
+                addMethodExport(name, body);
+            }
+        }
+    }
+
+    function addMachineMethod(input, body) {
+        var ast = createFunction(input.name, input.arguments);
+        var output = ast.body.body;
+        var stateSwitch = createSwitch(
+            createDotMember(createIdentifier("self"), "state"),
+        );
+        output.push(stateSwitch);
+        for (var obj of input.items) {
+            var stateName = createStateName(obj.branchName, obj.from);
+            var cas = createCase(createStringLiteral(stateName));
+            stateSwitch.cases.push(cas);
+            var name = createHandlerName(input, obj);
+            var call = createCall(
+                createIdentifier(name),
+                input.arguments.map(createIdentifier),
+            );
+            cas.consequent.push(createReturn(call));
+        }
+        var def = createCase(null);
+        def.consequent.push(createReturn(createIdentifier("undefined")));
+        stateSwitch.cases.push(def);
+        body.push(ast);
+    }
+
+    function scanAsts() {
+        project.allowDeclare = true;
+        if (project.moduleInit) {
+            addVariableDeclarations(project, project.moduleInit);
+        }
+        scanFunctionsAsts(project.functions);
+        scanFunctionsAsts(project.algoprops);
+        for (var name in project.classes) {
+            var cls = project.classes[name];
+            scanClassAst(cls);
+        }
+    }
+
+    function secondScanAstForFunctions(functions) {
+        for (var name in functions) {
+            var fun = functions[name];
+            secondScanAst(fun.scope, fun);
+        }
+    }
+
+    function getAllDeps(scope, algo) {
+        var start = algo.name;
+        var getAdjacentNodes = (key) => {
+            var current = scope.algoprops[key];
+            return Object.keys(current.dependencies);
+        };
+        var reportGraphError = (key, message) => {
+            var current = scope.algoprops[key];
+            reportError(
+                "Detected a cycle in property dependencies",
+                current.path,
+                undefined,
+                message,
+            );
+        };
+        var deps = topologicaSort(start, getAdjacentNodes, reportGraphError);
+        return deps;
+    }
+
+    function resolveAlgoprops(scope) {
+        for (var name in scope.algoprops) {
+            var algo = scope.algoprops[name];
+            var deps = getAllDeps(scope, algo);
+            algo.sortedDeps = deps;
+        }
+
+        scope.computeFunctions = {};
+        var names = Object.keys(scope.computes);
+        names.sort();
+        for (var name of names) {
+            var ast = buildComputeAst(scope, name);
+            scope.computeFunctions[name] = ast;
+        }
+    }
+
+    function createCall(callee, args) {
+        args = args || [];
+        return {
+            type: "CallExpression",
+            callee: callee,
+            arguments: args,
+        };
+    }
+
+    function createAwait(argument) {
+        return {
+            type: "AwaitExpression",
+            argument: argument,
+        };
+    }
+
+    function buildComputeAst(scope, name) {
+        var fname = buildComputeName(name);
+        var ast = createFunction(fname);
+        var algo = scope.algoprops[name];
+        var as = false;
+        for (var dep of algo.sortedDeps) {
+            var depAlgo = scope.algoprops[dep];
+            var call = createCall(createIdentifier(buildCalcName(dep)));
+            if (isAsync(depAlgo)) {
+                call = createAwait(call);
+                as = true;
+            }
+            var calcLine = createExpression(
+                createAssignment(createIdentifier(dep), call),
+            );
+            ast.body.body.push(calcLine);
+        }
+        if (as) {
+            ast.async = true;
+        }
+
+        return ast;
+    }
+
+    function secondScanAst(scope, fun) {
+        var ast = getAst(fun);
+        var context = secondPass(fun, scope);
+        traverseAst(context, ast, undefined, {}, undefined);
+    }
+
+    function secondScanAsts(scope, ctr) {
+        resolveAlgoprops(scope);
+
+        if (ctr) {
+            secondScanAst(scope, ctr);
+        }
+        secondScanAstForFunctions(scope.functions);
+        secondScanAstForFunctions(scope.algoprops);
+        for (var name in scope.classes) {
+            var cls = scope.classes[name];
+            secondScanAsts(cls.scope, cls);
+        }
+    }
+
+    function scanFunctionsAsts(functions) {
+        for (var name in functions) {
+            var fun = functions[name];
+            addVariableDeclarations(fun.scope, fun);
+        }
+    }
+
+    function scanClassAst(cls) {
+        addVariableDeclarations(cls.scope, cls);
+        scanFunctionsAsts(cls.scope.functions);
+        scanFunctionsAsts(cls.scope.algoprops);
+    }
+
+    function addVariableDeclarations(scope, fun) {
+        var ast = getAst(fun);
+        var context = firstPass(fun, scope);
+        traverseAst(context, ast.body.body, undefined, {}, undefined);
+    }
+
+    function isDeclared(scope, name) {
+        if (name in scope.declared) {
+            return true;
+        }
+
+        if (scope.parent) {
+            var parent = scopes[scope.parent];
+            if (name in parent.assignments) {
+                return true;
+            }
+            return isDeclared(parent, name);
+        }
+    }
+
+    function calculateAuto(scope) {
+        for (var name in scope.assignments) {
+            if (!isDeclared(scope, name)) {
+                scope.auto[name] = true;
+            }
+        }
+    }
+
+    function addVariableDeclarationsCore(scope, body) {
+        calculateAuto(scope);
+        var auto = Object.keys(scope.auto);
+        auto.sort();
+        if (auto.length !== 0) {
+            body.unshift(createDeclarations(auto));
+        }
+    }
+
+    async function run() {
+        if (state !== "idle") {
+            throw new Error("Invalid state " + state);
+        }
+        try {
+            gAsts = {};
+            gBranches = {};
+            await jsPreprocess();
+            if (failed) {
+                return;
+            }
+            buildAsts();
+            await pause(1);
+            if (failed) {
+                return;
+            }
+            checkCancellation();
+            scanAsts();
+            await pause(1);
+            if (failed) {
+                return;
+            }
+            checkCancellation();
+            secondScanAsts(project, project.moduleInit);
+            await pause(1);
+            if (failed) {
+                return;
+            }
+            checkCancellation();
+            var src = generateSourceCode();
+            await options.onData(src);
+        } catch (ex) {
+            if (ex.cancelled) {
+                reportError("Cancelled by user");
+            } else {
+                options.onError(ex);
+            }
+        }
+    }
+
+    self.stop = stop;
+    self.run = run;
+    return self;
+}
+
+module.exports = {
+    createDrakonTechGenerator,
+    createClojureGenerator,
+};
+
+},{"./astScanner":1,"./clojurelexer":4,"./sort":27,"./tools":28}],6:[function(require,module,exports){
+const {sortBy, findFirst, addRange, clone, replace} = require('./tools');
+function Js2604Generator(options) {
+    var self = { _type: 'Js2604Generator' };
+    var failed, gBranches, gById, gDebugAst, gDropAddress, gSimpleSilhouette, nextId, state;
+    state = 'idle';
+    failed = false;
+    nextId = 2;
+    gSimpleSilhouette = true;
+    gDropAddress = false;
+    gBranches = {};
+    gDebugAst = false;
+    gById = {};
+    function addActionToAst(step, body) {
+        var _collection_147, expr;
+        if (step.content) {
+            _collection_147 = step.content;
+            for (expr of _collection_147) {
+                body.push(expr);
+            }
+        }
+    }
+    function addAddressToAst(step, body) {
+        var assi, nextBranch, statement;
+        if (!gDropAddress) {
+            if (gSimpleSilhouette) {
+                nextBranch = gBranches[step.content];
+                convertNodesToAst(nextBranch.body, body);
+            } else {
+                assi = createAssignment(createIdentifier('_branch_'), createStringLiteral(step.content));
+                statement = createExpression(assi);
+                body.push(statement);
+            }
+        }
+    }
+    function addChild(parent, folder) {
+        var scope;
+        if (isFunctionNameUnique(parent, folder.name)) {
+            enrichFolder(folder);
+            scope = createScope('function', folder.name);
+            folder.scope = scope;
+            parent.children[folder.name] = folder;
+            folder.parent = parent.id;
+            generateFunctionId(folder);
+        } else {
+            reportError('Name is not unique: ' + folder.name, folder.path, undefined);
+        }
+    }
+    function addDeclaration(scope, name) {
+        scope.declarations[name] = true;
+    }
+    function addDeclarationsInFunction(step) {
+        var visitor;
+        visitor = function (node) {
+            return scanForAssignments(step, node);
+        };
+        traverseAst(step.body, visitor);
+        addDeclaratonsToBody(step);
+    }
+    function addDeclarationsRecursive(step, folder) {
+        var _collection_180, canDeclare, child, childStep, name;
+        addDeclarationsInFunction(step);
+        _collection_180 = folder.children;
+        for (name in _collection_180) {
+            child = _collection_180[name];
+            canDeclare = child.type === 'class';
+            childStep = createScopeStep(step, name, child.path, child.scope, getFunBody(child.ast), true, canDeclare);
+            childStep.canAwait = child.keywords.async;
+            addDeclarationsRecursive(childStep, child);
+        }
+    }
+    function addDeclaratonsToBody(step) {
+        var allVars, locals, loop;
+        locals = Object.keys(step.scope.locals);
+        loop = Object.keys(step.scope.loop);
+        allVars = locals.concat(loop);
+        if (!(allVars.length === 0)) {
+            allVars.sort();
+            step.body.unshift(createDeclaration(allVars));
+        }
+    }
+    function addDefaultReturnNull(sw) {
+        var cs;
+        cs = createCase(null);
+        sw.cases.push(cs);
+        cs.consequent.push(createReturn(createIdentifier('false')));
+    }
+    function addErrorToAst(step, body) {
+        var expr, message;
+        if (step.content) {
+            message = createPlus(createStringLiteral(step.message + ': '), step.content);
+        } else {
+            message = createStringLiteral(step.message);
+        }
+        expr = createThrow(message);
+        body.push(expr);
+    }
+    function addEventCase(event, cs) {
+        var _collection_149, arg;
+        cs.consequent.push(parseStatement('_args_=[]'));
+        cs.consequent.push(parseStatement('_args_.push("' + event.name + '")'));
+        _collection_149 = event.args;
+        for (arg of _collection_149) {
+            cs.consequent.push(parseStatement('_args_.push(' + arg + ')'));
+        }
+        cs.consequent.push(parseStatement('me._busy =true'));
+        cs.consequent.push(parseStatement('_topGen_.next(_args_)'));
+        cs.consequent.push(createBreak());
+    }
+    function addEventSignature(folder, caseId, caseItem) {
+        var args, eventInfo, existing, name, signature;
+        name = caseItem.content.callee.name;
+        args = caseItem.content.arguments.map(arg => arg.name);
+        signature = args.join(',');
+        existing = folder.events[name];
+        if (existing) {
+            if (signature === existing.signature) {
+                return name;
+            } else {
+                reportError('Incompatible signature', folder.path, caseId);
+                return undefined;
+            }
+        } else {
+            eventInfo = {
+                name: name,
+                signature: signature,
+                args: args
+            };
+            folder.events[name] = eventInfo;
+            return name;
+        }
+    }
+    function addExports(module, src) {
+        var _collection_144, child, code, dep, deps, exportSrc, exported, line, lines, name, parsed;
+        exported = [];
+        _collection_144 = module.children;
+        for (name in _collection_144) {
+            child = _collection_144[name];
+            if (child.keywords.export) {
+                exported.push(child.name);
+            }
+        }
+        if (exported.length === 0) {
+            return src;
+        } else {
+            exported.sort();
+            if (isIife()) {
+                code = exported.map(name => 'window.' + name + '=' + name).join('\n');
+            } else {
+                if (isUnit()) {
+                    lines = exported.map(name => 'unit.' + name + '=' + name);
+                    deps = getDependencies();
+                    for (dep of deps) {
+                        line = 'Object.defineProperty(unit,\'' + dep + '\',{get:function(){return ' + dep + ';},set:function(newValue){' + dep + '=newValue;},enumerable:true,configurable:true});';
+                        lines.push(line);
+                    }
+                    code = lines.join('\n');
+                } else {
+                    if (isModules()) {
+                        code = 'export {' + exported.join(', ') + '}';
+                    } else {
+                        code = 'module.exports = {' + exported.join(', ') + '}';
+                    }
+                }
+            }
+            parsed = options.esprima.parseModule(code, { loc: false });
+            exportSrc = options.escodegen.generate(parsed);
+            return src + '\n' + exportSrc;
+        }
+    }
+    function addInputEvent(folder, item, id) {
+        var name;
+        item.eventNames = [];
+        if (ensureCall(folder, id, item)) {
+            name = addEventSignature(folder, id, item);
+            if (name) {
+                item.eventNames.push(name);
+                rewriteEventInput(folder, id, item, name);
+            }
+        }
+    }
+    function addLocal(scope, variable) {
+        scope.locals[variable] = true;
+        addDeclaration(scope, variable);
+    }
+    function addLoopToAst(step, body) {
+        var node;
+        if (step.content) {
+            node = step.content;
+            node = clone(step.content);
+            node.body = createBlock();
+        } else {
+            node = createWhileTrue();
+        }
+        convertNodesToAst(step.body, node.body.body);
+        body.push(node);
+    }
+    function addLoopVar(scope, variable) {
+        scope.loop[variable] = true;
+        addDeclaration(scope, variable);
+    }
+    function addQuestionToAst(step, body) {
+        var content, node;
+        content = decodeQuestionContent(step.content);
+        node = createIfNode(content);
+        convertNodesToAst(step.yes, node.consequent.body);
+        if (step.no.length > 0) {
+            node.alternate = createBlock();
+            convertNodesToAst(step.no, node.alternate.body);
+        }
+        body.push(node);
+    }
+    function addResolveAtEnd(ast) {
+        if (!bodyHasReturn(ast.body)) {
+            if (!ast.sil) {
+                ast.body.body.push(parseStatement('_topResolve_()'));
+            }
+        }
+    }
+    function addSelectEvent(folder, item, id) {
+        var _collection_196, caseId, caseItem, content, lines, name;
+        addLocal(folder.scope, '_eventType_');
+        addLocal(folder.scope, '_event_');
+        item.content = createIdentifier('_eventType_');
+        lines = [
+            'me.state = "' + id + '"',
+            'me._busy = false',
+            '_event_ = yield',
+            '_eventType_ = _event_[0]'
+        ];
+        content = linesToContent(folder, id, lines);
+        insertActionBefore(folder, id, content);
+        item.eventNames = [];
+        _collection_196 = item.cases;
+        for (caseId of _collection_196) {
+            caseItem = folder.items[caseId];
+            if (ensureCall(folder, caseId, caseItem)) {
+                name = addEventSignature(folder, caseId, caseItem);
+                if (name) {
+                    item.eventNames.push(name);
+                    rewriteEventCase(folder, caseId, caseItem, name);
+                }
+            }
+        }
+    }
+    function addVariableDeclarations(module) {
+        var rootStep;
+        rootStep = createScopeStep(undefined, 'module', module.path, module.scope, getFunBody(module.ast), true, true);
+        addDeclarationsRecursive(rootStep, module);
+    }
+    function appendModuleExport(src, name) {
+        var exporting;
+        exporting = '\nif (typeof module !== "undefined" && module.exports) {\n' + '    module.exports = {\n' + '        ' + name + '\n' + '    };\n}\n';
+        return src + exporting;
+    }
+    function assignEventArguments(folder, name, lines) {
+        var _collection_198, arg, counter, eventInfo;
+        eventInfo = folder.events[name];
+        counter = 1;
+        _collection_198 = eventInfo.args;
+        for (arg of _collection_198) {
+            lines.push(arg + ' = _event_[' + counter + ']');
+            counter++;
+        }
+    }
+    function bodyHasReturn(body) {
+        if (body && body.body && body.body.length) {
+            return hasReturn(body.body[body.body.length - 1]);
+        } else {
+            return false;
+        }
+    }
+    function buildComplexSilhouette(fun, tree, functionBody) {
+        var _collection_151, branch, branchState, caseBody, caseClause, defClause, end, firstName, lastBranch, loop, loopBody, ordinal, select;
+        branchState = '_branch_';
+        addLocal(fun.scope, branchState);
+        firstName = tree.branches[0].name;
+        pushAssi(branchState, createStringLiteral(firstName), functionBody);
+        loop = createWhileTrue();
+        functionBody.push(loop);
+        loopBody = loop.body.body;
+        select = createSwitch(createIdentifier(branchState));
+        loopBody.push(select);
+        ordinal = 0;
+        end = hasEnd(fun);
+        _collection_151 = tree.branches;
+        for (branch of _collection_151) {
+            if (!(branch.name === 'catch')) {
+                caseClause = createCase(createStringLiteral(branch.name));
+                select.cases.push(caseClause);
+                caseBody = caseClause.consequent;
+                lastBranch = ordinal === tree.branches.length - 1 && end;
+                if (lastBranch) {
+                    pushAssi(branchState, createIdentifier('undefined'), caseBody);
+                }
+                convertNodesToAst(branch.body, caseBody);
+                if (!endsWithReturn(caseBody)) {
+                    caseBody.push(createBreak());
+                }
+            }
+            ordinal++;
+        }
+        defClause = createCase(null);
+        if (fun.isMachine) {
+            defClause.consequent.push(parseStatement('_topResolve_()'));
+        }
+        defClause.consequent.push(createReturn(null));
+        select.cases.push(defClause);
+    }
+    function buildFunctionAst(fun) {
+        var _selectValue_153, drakonJson, funAst, functionBody, genOptions, tree, treeStr;
+        funAst = createFunction(fun.name, fun.arguments);
+        if (fun.keywords.async) {
+            funAst.async = true;
+        }
+        functionBody = funAst.body.body;
+        drakonJson = JSON.stringify(fun, null, 4);
+        genOptions = { secondary: 'catch' };
+        try {
+            treeStr = options.toTree(drakonJson, fun.name, fun.path, options.language, genOptions);
+        } catch (ex) {
+            reportError(ex.message, fun.path, ex.nodeId);
+            return funAst;
+        }
+        tree = JSON.parse(treeStr);
+        _selectValue_153 = tree.branches.length;
+        if (!(_selectValue_153 === 0)) {
+            if (_selectValue_153 === 1) {
+                convertNodesToAst(tree.branches[0].body, functionBody);
+            } else {
+                funAst.sil = convertSilhouetteToAst(fun, tree, functionBody);
+            }
+        }
+        if (gDebugAst) {
+            try {
+                options.escodegen.generate(funAst);
+            } catch (ex) {
+                console.log('---------------');
+                console.log(ex);
+                console.log(JSON.stringify(funAst, null, 4));
+            }
+        }
+        return funAst;
+    }
+    function buildLauncherAst(fun, className) {
+        var argstr, functionBody, name, originalName;
+        fun.ast = createFunction(fun.name, fun.arguments);
+        fun.scope = createScope('function', fun.name);
+        functionBody = fun.ast.body.body;
+        if (className) {
+            originalName = makeMethodName(className, fun.name);
+        } else {
+            originalName = fun.name;
+        }
+        name = makeCreateName(originalName);
+        argstr = fun.arguments.join(', ');
+        functionBody.push(parseStatement('_obj_ = ' + name + '(' + argstr + ')'));
+        functionBody.push(parseStatement('return _obj_.run()'));
+    }
+    function buildMachineAst(parent, fun) {
+        var _collection_155, _collection_157, ctr, eventName, evt, functionBody, guard, mainAst, me, name, runAst;
+        ctr = createEmptyFunction(makeCreateName(fun.name));
+        ctr.arguments = fun.arguments.slice();
+        if (fun.keywords.export) {
+            ctr.keywords.export = true;
+        }
+        addChild(parent, ctr);
+        _collection_155 = ctr.arguments;
+        for (name of _collection_155) {
+            addDeclaration(ctr.scope, name);
+        }
+        ctr.ast = createFunction(ctr.name, ctr.arguments);
+        functionBody = ctr.ast.body.body;
+        addLocal(ctr.scope, '_earlyPromise_');
+        addLocal(ctr.scope, '_topGen_');
+        addLocal(ctr.scope, '_topResolve_');
+        addLocal(ctr.scope, '_topReject_');
+        me = 'me = {_type:"' + fun.originalName + '",_busy:true,state:"created"}';
+        functionBody.push(parseStatement(me));
+        functionBody.push(parseStatement('_topResolve_ = function(_value_)' + '{_earlyPromise_ = Promise.resolve(_value_);}'));
+        functionBody.push(parseStatement('_topReject_ = function(_value_)' + '{throw _value_;}'));
+        replaceReturnInMachine(fun);
+        mainAst = buildFunctionAst(fun);
+        addResolveAtEnd(mainAst);
+        mainAst.id.name = makeMainName(fun.name);
+        mainAst.params = [];
+        mainAst.async = false;
+        mainAst.generator = true;
+        functionBody.push(mainAst);
+        runAst = createFunction(makeRunName(fun.name));
+        functionBody.push(runAst);
+        guard = [
+            'if(me.state!=="created")',
+            '{throw new Error("run() can be called only once");}'
+        ];
+        runAst.body.body.push(parseStatement(guard.join('')));
+        runAst.body.body.push(parseStatement('me.state="started"'));
+        runAst.body.body.push(parseStatement('_topGen_ = ' + makeMainName(fun.name) + '()'));
+        runAst.body.body.push(parseStatement('_topGen_.next()'));
+        runAst.body.body.push(parseStatement('if (_earlyPromise_){return _earlyPromise_;}'));
+        runAst.body.body.push(parseStatement('return new Promise((resolve, reject) => {' + '_topResolve_ = resolve;_topReject_=reject;})'));
+        functionBody.push(parseStatement('me.run=' + makeRunName(fun.name)));
+        functionBody.push(parseStatement('me.stop=function() {me.state=undefined;}'));
+        _collection_157 = fun.events;
+        for (eventName in _collection_157) {
+            evt = _collection_157[eventName];
+            createEventMethod(fun, eventName, functionBody);
+        }
+        functionBody.push(parseStatement('return me'));
+    }
+    function buildModuleAst(folder) {
+        var child, className, name, names;
+        folder.ast = buildFunctionAst(folder);
+        names = Object.keys(folder.children);
+        names.sort();
+        for (name of names) {
+            child = folder.children[name];
+            if (child.isMachine) {
+                buildMachineAst(folder, child);
+                if (folder.type === 'class') {
+                    className = folder.name;
+                } else {
+                    className = undefined;
+                }
+                buildLauncherAst(child, className);
+            } else {
+                buildModuleAst(child);
+            }
+        }
+    }
+    function checkCancellation() {
+        var error;
+        if (!state) {
+            error = new Error('Cancelled');
+            error.cancelled = true;
+            throw error;
+        }
+    }
+    function collectReceiveCases(folder, item) {
+        var caseItem, current;
+        item.cases = [];
+        current = item.one;
+        while (true) {
+            if (current) {
+                item.cases.push(current);
+                caseItem = folder.items[current];
+                current = caseItem.two;
+            } else {
+                break;
+            }
+        }
+    }
+    function combineClassAst(folder) {
+        var child, exported, initBody, name, names, stm;
+        initBody = getFunBody(folder.ast);
+        stm = 'var self = {_type:"' + folder.name + '"}';
+        initBody.unshift(parseStatement(stm));
+        exported = [];
+        names = Object.keys(folder.children);
+        names.sort();
+        for (name of names) {
+            child = folder.children[name];
+            initBody.push(child.ast);
+            if (child.keywords.export) {
+                child.ast.id.name = makeMethodName(folder.name, name);
+                exported.push(name);
+            }
+        }
+        exported.sort();
+        for (name of exported) {
+            initBody.push(parseStatement('self.' + name + ' = ' + makeMethodName(folder.name, name)));
+        }
+        initBody.push(parseStatement('return self'));
+        return folder.ast;
+    }
+    function combineModuleAst(module) {
+        var child, childAst, initBody, name, names, program, step;
+        program = createProgram();
+        initBody = getFunBody(module.ast);
+        for (step of initBody) {
+            program.body.push(step);
+        }
+        names = Object.keys(module.children);
+        names.sort();
+        for (name of names) {
+            child = module.children[name];
+            if (child.type === 'class') {
+                childAst = combineClassAst(child);
+            } else {
+                childAst = child.ast;
+            }
+            program.body.push(childAst);
+        }
+        return program;
+    }
+    function convertNodesToAst(steps, body) {
+        var _selectValue_160, step;
+        for (step of steps) {
+            _selectValue_160 = step.type;
+            if (_selectValue_160 === 'action') {
+                addActionToAst(step, body);
+            } else {
+                if (_selectValue_160 === 'question') {
+                    addQuestionToAst(step, body);
+                } else {
+                    if (_selectValue_160 === 'loop') {
+                        addLoopToAst(step, body);
+                    } else {
+                        if (_selectValue_160 === 'error') {
+                            addErrorToAst(step, body);
+                        } else {
+                            if (_selectValue_160 === 'break') {
+                                if (!endsWithReturn(body)) {
+                                    body.push(createBreak());
+                                }
+                            } else {
+                                if (_selectValue_160 === 'address') {
+                                    if (!endsWithReturn(body)) {
+                                        addAddressToAst(step, body);
+                                    }
+                                } else {
+                                    console.log('Unexpected step type: ' + step.type);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    function convertReturnToResolve(stm, fun) {
+        var arg;
+        arg = stm.argument;
+        delete stm.argument;
+        stm.type = 'ExpressionStatement';
+        stm.expression = {
+            'type': 'CallExpression',
+            'callee': {
+                'type': 'Identifier',
+                'name': fun
+            },
+            'arguments': [arg]
+        };
+    }
+    function convertSilhouetteToAst(fun, tree, functionBody) {
+        var _collection_162, branch, catchBranch, catchNode;
+        gBranches = {};
+        _collection_162 = tree.branches;
+        for (branch of _collection_162) {
+            if (!branch.name) {
+                reportError('Branch name cannot be empty', fun.path, branch.id);
+                return;
+            }
+            if (branch.name in gBranches) {
+                reportError('Non-unique branch name', fun.path, branch.id);
+                return;
+            }
+            gBranches[branch.name] = branch;
+        }
+        if (tree.secondary) {
+            gDropAddress = true;
+            catchNode = createTryCatch('_handlerData_');
+            functionBody.push(catchNode);
+            catchBranch = tree.branches[tree.secondary];
+            convertNodesToAst(catchBranch.body, catchNode.handler.body.body);
+            functionBody = catchNode.block.body;
+        }
+        gDropAddress = false;
+        if (isSimpleSilhouette(tree.branches)) {
+            gSimpleSilhouette = true;
+            convertNodesToAst(tree.branches[0].body, functionBody);
+        } else {
+            gSimpleSilhouette = false;
+            buildComplexSilhouette(fun, tree, functionBody);
+        }
+        return !gSimpleSilhouette;
+    }
+    function createAnd(left, right) {
+        return {
+            type: 'LogicalExpression',
+            operator: '&&',
+            left: left,
+            right: right
+        };
+    }
+    function createAssignment(identifier, expression) {
+        return {
+            type: 'AssignmentExpression',
+            operator: '=',
+            left: identifier,
+            right: expression
+        };
+    }
+    function createBlock() {
+        return {
+            type: 'BlockStatement',
+            body: []
+        };
+    }
+    function createBreak() {
+        return {
+            type: 'BreakStatement',
+            label: null
+        };
+    }
+    function createCase(value) {
+        return {
+            type: 'SwitchCase',
+            test: value,
+            consequent: []
+        };
+    }
+    function createComputedMember(obj, prop) {
+        return {
+            type: 'MemberExpression',
+            computed: true,
+            object: obj,
+            property: createIdentifier(prop)
+        };
+    }
+    function createDeclaration(vars) {
+        return {
+            type: 'VariableDeclaration',
+            declarations: vars.map(createVariableDeclaration),
+            kind: 'var'
+        };
+    }
+    function createEmptyFunction(name) {
+        return {
+            type: 'drakon',
+            name: name,
+            items: {},
+            keywords: {},
+            children: {}
+        };
+    }
+    function createEqual(left, right) {
+        return {
+            type: 'BinaryExpression',
+            operator: '===',
+            left: left,
+            right: right
+        };
+    }
+    function createEventMethod(fun, eventName, functionBody) {
+        var _collection_164, body, cs, def, event, eventItem, funAst, itemId, sw;
+        event = fun.events[eventName];
+        funAst = createFunction(eventName, event.args);
+        delete funAst.id;
+        funAst.type = 'FunctionExpression';
+        body = getFunBody(funAst);
+        body.push(parseStatement('if (me._busy) {throw new Error("Synchronous reentry is not allowed");}'));
+        sw = createSwitch(createMember(createIdentifier('me'), 'state'));
+        body.push(sw);
+        _collection_164 = fun.eventItems;
+        for (itemId of _collection_164) {
+            eventItem = fun.items[itemId];
+            if (!(eventItem.eventNames.indexOf(eventName) === -1)) {
+                cs = createCase(createStringLiteral(itemId));
+                sw.cases.push(cs);
+            }
+        }
+        addEventCase(event, cs);
+        def = createCase(null);
+        sw.cases.push(def);
+        def.consequent.push(createBreak());
+        functionBody.push(createExpression(createAssignment(createMember(createIdentifier('me'), eventName), funAst)));
+    }
+    function createExpression(expression) {
+        return {
+            type: 'ExpressionStatement',
+            expression: expression
+        };
+    }
+    function createFor(init, test, update) {
+        return {
+            type: 'ForStatement',
+            init: init,
+            test: test,
+            update: update,
+            body: createBlock()
+        };
+    }
+    function createForIn(variable, collectionExpr) {
+        return {
+            type: 'ForInStatement',
+            left: createIdentifier(variable),
+            right: collectionExpr,
+            body: createBlock(),
+            each: false
+        };
+    }
+    function createForOf(variable, collectionExpr) {
+        return {
+            type: 'ForOfStatement',
+            left: createIdentifier(variable),
+            right: collectionExpr,
+            body: createBlock()
+        };
+    }
+    function createFunction(name, args) {
+        args = args || [];
+        return {
+            type: 'FunctionDeclaration',
+            id: createIdentifier(name),
+            params: args.map(createIdentifier),
+            body: createBlock(),
+            generator: false,
+            expression: false,
+            async: false
+        };
+    }
+    function createGetValue(valueVar, keyVar, collection) {
+        var expr;
+        expr = createAssignment(createIdentifier(valueVar), createComputedMember(collection, keyVar));
+        expr.loopInternal = true;
+        return expr;
+    }
+    function createIdentifier(name) {
+        return {
+            type: 'Identifier',
+            name: name
+        };
+    }
+    function createIfNode(content) {
+        return {
+            type: 'IfStatement',
+            test: content,
+            consequent: createBlock()
+        };
+    }
+    function createMember(obj, prop) {
+        return {
+            type: 'MemberExpression',
+            computed: false,
+            object: obj,
+            property: createIdentifier(prop)
+        };
+    }
+    function createNot(operand) {
+        return {
+            type: 'UnaryExpression',
+            operator: '!',
+            argument: operand
+        };
+    }
+    function createOr(left, right) {
+        return {
+            type: 'LogicalExpression',
+            operator: '||',
+            left: left,
+            right: right
+        };
+    }
+    function createPlus(left, right) {
+        return {
+            type: 'BinaryExpression',
+            operator: '+',
+            left: left,
+            right: right
+        };
+    }
+    function createProgram() {
+        return {
+            type: 'Program',
+            body: []
+        };
+    }
+    function createReturn(value) {
+        return {
+            type: 'ReturnStatement',
+            argument: value
+        };
+    }
+    function createScope(type, name) {
+        return {
+            _type: 'scope',
+            type: type,
+            name: name,
+            declarations: {},
+            loop: {},
+            locals: {},
+            children: {}
+        };
+    }
+    function createScopeStep(parent, name, path, scope, body, canAssign, canDeclare) {
+        return {
+            parent: parent,
+            name: name,
+            path: path || '',
+            scope: scope,
+            body: body,
+            canAssign: canAssign || false,
+            canDeclare: canDeclare || false
+        };
+    }
+    function createScopeStepForLambda(step, node) {
+        var _collection_183, nextScope, nextStep, param;
+        nextScope = createScope('lambda', 'lambda');
+        _collection_183 = node.params;
+        for (param of _collection_183) {
+            if (param.type === 'Identifier') {
+                addDeclaration(nextScope, param.name);
+            }
+        }
+        nextStep = createScopeStep(step, 'lambda', step.path, nextScope, node.body.body, true, false);
+        nextStep.itemId = step.itemId;
+        return nextStep;
+    }
+    function createStringLiteral(value) {
+        return {
+            type: 'Literal',
+            value: value,
+            raw: JSON.stringify(value)
+        };
+    }
+    function createSwitch(value) {
+        return {
+            type: 'SwitchStatement',
+            discriminant: value,
+            cases: []
+        };
+    }
+    function createThrow(message) {
+        return {
+            type: 'ThrowStatement',
+            argument: {
+                type: 'NewExpression',
+                callee: createIdentifier('Error'),
+                arguments: [message]
+            }
+        };
+    }
+    function createTryCatch(variableName) {
+        return {
+            'type': 'TryStatement',
+            'block': {
+                'type': 'BlockStatement',
+                'body': []
+            },
+            'handler': {
+                'type': 'CatchClause',
+                'param': {
+                    'type': 'Identifier',
+                    'name': variableName
+                },
+                'body': {
+                    'type': 'BlockStatement',
+                    'body': []
+                }
+            },
+            'finalizer': null
+        };
+    }
+    function createVariableDeclaration(variable) {
+        return {
+            type: 'VariableDeclarator',
+            id: createIdentifier(variable),
+            init: null
+        };
+    }
+    function createWhileTrue() {
+        return {
+            type: 'WhileStatement',
+            test: {
+                type: 'Literal',
+                value: true,
+                raw: 'true'
+            },
+            body: createBlock()
+        };
+    }
+    function decodeQuestionContent(content) {
+        var _selectValue_166, decoded, left, right;
+        _selectValue_166 = content.operator;
+        if (_selectValue_166 === 'not') {
+            decoded = decodeQuestionContent(content.operand);
+            return createNot(decoded);
+        } else {
+            if (_selectValue_166 === 'and') {
+                left = decodeQuestionContent(content.left);
+                right = decodeQuestionContent(content.right);
+                return createAnd(left, right);
+            } else {
+                if (_selectValue_166 === 'or') {
+                    left = decodeQuestionContent(content.left);
+                    right = decodeQuestionContent(content.right);
+                    return createOr(left, right);
+                } else {
+                    if (_selectValue_166 === 'equal') {
+                        left = decodeQuestionContent(content.left);
+                        right = decodeQuestionContent(content.right);
+                        return createEqual(left, right);
+                    } else {
+                        return content;
+                    }
+                }
+            }
+        }
+    }
+    function endsWithReturn(caseBody) {
+        var last;
+        if (caseBody.length === 0) {
+            return false;
+        } else {
+            last = caseBody[caseBody.length - 1];
+            if (hasReturn(last)) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+    }
+    function enrichFolder(folder) {
+        if (!folder.keywords) {
+            folder.keywords = {};
+        }
+        if (!folder.items) {
+            folder.items = {};
+        }
+        if (!folder.children) {
+            folder.children = {};
+        }
+    }
+    function ensureCall(folder, id, item) {
+        var _collection_200, arg;
+        if (item.content && (item.content.type === 'CallExpression' && item.content.callee.type === 'Identifier')) {
+            _collection_200 = item.content.arguments;
+            for (arg of _collection_200) {
+                if (!(arg.type === 'Identifier')) {
+                    reportError('This call expression expects variables', folder.path, id);
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            reportError('A function call expression expected here', folder.path, id);
+            return false;
+        }
+    }
+    function ensureExpression(folder, id, item) {
+        var expression;
+        expression = getExpression(item);
+        if (expression) {
+            item.content = expression;
+            return true;
+        } else {
+            reportError('A value expression is expected here', folder.path, id);
+            return false;
+        }
+    }
+    function ensureHasContent(folder, id, item) {
+        if (item.content && item.content.length > 0) {
+            return true;
+        } else {
+            reportError('Icon cannot be empty', folder.path, id);
+            return false;
+        }
+    }
+    function extractVariablesFromDeclaration(node, scope) {
+        var _collection_185, _collection_189, _collection_191, _selectValue_187, decl, item, prop;
+        _collection_185 = node.declarations;
+        for (decl of _collection_185) {
+            if (decl.type === 'VariableDeclarator') {
+                _selectValue_187 = decl.id.type;
+                if (_selectValue_187 === 'ObjectPattern') {
+                    _collection_191 = decl.id.properties;
+                    for (prop of _collection_191) {
+                        tryAddIdentifier(scope, prop.key);
+                    }
+                } else {
+                    if (_selectValue_187 === 'ArrayPattern') {
+                        _collection_189 = decl.id.elements;
+                        for (item of _collection_189) {
+                            tryAddIdentifier(scope, item);
+                        }
+                    } else {
+                        tryAddIdentifier(scope, decl.id);
+                    }
+                }
+            }
+        }
+    }
+    function findClassDiagram(folders) {
+        var cls, folder;
+        cls = undefined;
+        for (folder of folders) {
+            if (folder.name === 'class') {
+                enrichFolder(folder);
+                cls = folder;
+            } else {
+                if (folder.name === 'module') {
+                    reportError('module is not expected in this folder', folder.path);
+                }
+            }
+        }
+        return cls;
+    }
+    function generateFunctionId(folder) {
+        folder.id = generateId('fun');
+        gById[folder.id] = folder;
+    }
+    function generateId(prefix) {
+        var id;
+        id = prefix + '_' + nextId;
+        nextId++;
+        return id;
+    }
+    function getDepDeclarations() {
+        var dependencies;
+        dependencies = getDependencies();
+        return dependencies.map(dep => 'var ' + dep + ';').join('\n') + '\n';
+    }
+    function getDependencies() {
+        var deps;
+        if (options.settings && options.settings.dependencies) {
+            deps = splitTrim(options.settings.dependencies, '\n');
+            deps.sort();
+            return deps;
+        } else {
+            return [];
+        }
+    }
+    function getExpression(item) {
+        var expr;
+        if (item.content && item.content.length === 1) {
+            expr = item.content[0];
+            if (expr.type === 'ExpressionStatement' && !(expr.expression.type === 'AssignmentExpression') && !(expr.expression.type === 'SequenceExpression')) {
+                return expr.expression;
+            } else {
+                return undefined;
+            }
+        } else {
+            return undefined;
+        }
+    }
+    function getFunBody(fun) {
+        return fun.body.body;
+    }
+    function hasEnd(fun) {
+        var _collection_168, id, item;
+        _collection_168 = fun.items;
+        for (id in _collection_168) {
+            item = _collection_168[id];
+            if (item.type === 'end') {
+                return true;
+            }
+        }
+        return false;
+    }
+    function hasReturn(node) {
+        var _selectValue_171;
+        _selectValue_171 = node.type;
+        if (_selectValue_171 === 'ReturnStatement') {
+            return true;
+        } else {
+            if (_selectValue_171 === 'ThrowStatement') {
+                return true;
+            } else {
+                if (_selectValue_171 === 'IfStatement') {
+                    if (bodyHasReturn(node.consequent) && bodyHasReturn(node.alternate)) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+    }
+    function insertActionAfter(folder, existingId, content) {
+        var before, id, item;
+        id = generateId('_item_');
+        before = folder.items[existingId];
+        item = {
+            id: id,
+            type: 'action',
+            content: content,
+            one: before.one
+        };
+        before.one = id;
+        folder.items[id] = item;
+    }
+    function insertActionBefore(folder, beforeId, expression) {
+        var _collection_213, content, existingItem, id, item, itemId;
+        id = generateId('_item_');
+        if (Array.isArray(expression)) {
+            content = expression;
+        } else {
+            content = [createExpression(expression)];
+        }
+        item = {
+            id: id,
+            type: 'action',
+            content: content,
+            one: beforeId
+        };
+        _collection_213 = folder.items;
+        for (itemId in _collection_213) {
+            existingItem = _collection_213[itemId];
+            if (existingItem.one === beforeId) {
+                existingItem.one = id;
+            }
+            if (existingItem.two === beforeId) {
+                existingItem.two = id;
+            }
+        }
+        folder.items[id] = item;
+    }
+    function isDeclared(step, varName) {
+        var current;
+        current = step;
+        while (true) {
+            if (current) {
+                if (varName in current.scope.declarations) {
+                    return true;
+                } else {
+                    current = current.parent;
+                }
+            } else {
+                return false;
+            }
+        }
+    }
+    function isFunctionNameUnique(parent, name) {
+        var current;
+        current = parent;
+        while (true) {
+            if (name in current.children) {
+                return false;
+            } else {
+                if (current.parent) {
+                    current = gById[current.parent];
+                } else {
+                    return true;
+                }
+            }
+        }
+    }
+    function isIife() {
+        if (options.settings && options.settings.iife) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    function isModules() {
+        if (options.settings && options.settings.modules) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    function isSimpleSilhouette(branches) {
+        var branch, i;
+        if (branches[0].refs > 0) {
+            return false;
+        }
+        for (i = 0; i < branches.length; i++) {
+            branch = branches[i];
+            if (branch.refs > 1) {
+                if (i === branches.length - 1) {
+                    return simpleBranch(branch);
+                } else {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    function isUnit() {
+        if (options.settings && options.settings.unit) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    function linesToContent(folder, id, lines) {
+        var dummyItem, src;
+        src = lines.join('\n');
+        dummyItem = { content: src };
+        parseItemContent(folder, id, dummyItem);
+        return dummyItem.content;
+    }
+    function makeCreateName(name) {
+        return name + '_create';
+    }
+    function makeMainName(name) {
+        return name + '_main';
+    }
+    function makeMethodName(className, name) {
+        return name;
+    }
+    function makeRunName(name) {
+        return name + '_run';
+    }
+    function mustStop() {
+        if (!failed && state) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+    function normalizeAsync(folder) {
+        if (folder.keywords.machine || folder.keywords.async) {
+            delete folder.keywords.machine;
+            folder.keywords.async = true;
+        } else {
+            folder.keywords.async = false;
+        }
+    }
+    function parseAction(folder, id, item) {
+        parseItemContent(folder, id, item);
+    }
+    function parseArguments(folder) {
+        var name, names;
+        names = splitTrim(folder.params, '\n');
+        folder.arguments = names;
+        for (name of names) {
+            addDeclaration(folder.scope, name);
+        }
+    }
+    function parseCase(folder, id, item) {
+        parseItemContent(folder, id, item);
+        if (item.two) {
+            ensureHasContent(folder, id, item);
+        }
+        if (item.content) {
+            ensureExpression(folder, id, item);
+        }
+    }
+    function parseForEachLoop(folder, id, item) {
+        var expr1, expr2, first, newContent, oldContent, second, var1, var2, varName;
+        expr1 = item.content[0];
+        expr2 = item.content[1];
+        if (expr1.type === 'ExpressionStatement' && expr2.type === 'ExpressionStatement') {
+            first = expr1.expression;
+            second = expr2.expression;
+            if (!(second.type === 'Identifier')) {
+                varName = generateId('_collection');
+                addLocal(folder.scope, varName);
+                oldContent = second;
+                second = createIdentifier(varName);
+                newContent = createAssignment(createIdentifier(varName), oldContent);
+                insertActionBefore(folder, id, newContent);
+            }
+            if (first.type === 'Identifier') {
+                item.subtype = 'array';
+                item.variable = first.name;
+                item.content = createForOf(item.variable, second);
+                item.content.itemId = id;
+                addLoopVar(folder.scope, item.variable);
+            } else {
+                if (first.type === 'SequenceExpression' && first.expressions.length === 2) {
+                    var1 = first.expressions[0];
+                    var2 = first.expressions[1];
+                    if (var1.type === 'Identifier' && var2.type === 'Identifier') {
+                        item.subtype = 'dictionary';
+                        item.keyVariable = var1.name;
+                        item.valueVariable = var2.name;
+                        insertActionBefore(folder, item.one, createGetValue(item.valueVariable, item.keyVariable, second));
+                        item.content = createForIn(item.keyVariable, second);
+                        item.content.itemId = id;
+                        addLoopVar(folder.scope, item.keyVariable);
+                        addLoopVar(folder.scope, item.valueVariable);
+                    } else {
+                        reportBadLoop(folder, id, item);
+                    }
+                } else {
+                    reportBadLoop(folder, id, item);
+                }
+            }
+        } else {
+            reportBadLoop(folder, id, item);
+        }
+    }
+    function parseItem(folder, id, item) {
+        var _selectValue_202;
+        _selectValue_202 = item.type;
+        if (_selectValue_202 === 'action') {
+            parseAction(folder, id, item);
+        } else {
+            if (_selectValue_202 === 'question') {
+                parseQuestion(folder, id, item);
+            } else {
+                if (_selectValue_202 === 'select') {
+                    parseSelect(folder, id, item);
+                } else {
+                    if (_selectValue_202 === 'case') {
+                        parseCase(folder, id, item);
+                    } else {
+                        if (_selectValue_202 === 'loopbegin') {
+                            parseLoop(folder, id, item);
+                        } else {
+                            if (_selectValue_202 === 'soutput') {
+                                parseOutput(folder, id, item);
+                            } else {
+                                if (_selectValue_202 === 'sinput') {
+                                    parseSInput(folder, id, item);
+                                } else {
+                                    if (_selectValue_202 === 'pause') {
+                                        parsePause(folder, id, item);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    function parseItemContent(folder, id, item) {
+        var content;
+        content = item.content || '';
+        content = content.trim();
+        if (content) {
+            try {
+                item.content = parseNormal(content, id);
+            } catch (ex) {
+                reportError(ex.message, folder.path, id);
+                delete item.content;
+            }
+        } else {
+            delete item.content;
+        }
+    }
+    function parseItems(folder) {
+        var _collection_204, child, name;
+        parseItemsInFunction(folder);
+        _collection_204 = folder.children;
+        for (name in _collection_204) {
+            child = _collection_204[name];
+            parseItems(child);
+        }
+    }
+    function parseItemsInFunction(folder) {
+        var id, ids, item;
+        resetNextId();
+        parseArguments(folder);
+        normalizeAsync(folder);
+        folder.eventItems = [];
+        ids = Object.keys(folder.items);
+        for (id of ids) {
+            item = folder.items[id];
+            parseItem(folder, id, item);
+        }
+        setUpMachine(folder);
+    }
+    function parseLoop(folder, id, item) {
+        var _selectValue_207, init, test, update;
+        parseItemContent(folder, id, item);
+        if (ensureHasContent(folder, id, item)) {
+            _selectValue_207 = item.content.length;
+            if (_selectValue_207 === 2) {
+                parseForEachLoop(folder, id, item);
+            } else {
+                if (_selectValue_207 === 3) {
+                    init = stripExpression(item.content[0]);
+                    test = stripExpression(item.content[1]);
+                    update = stripExpression(item.content[2]);
+                    item.content = createFor(init, test, update);
+                    item.content.itemId = id;
+                } else {
+                    reportBadLoop(folder, id, item);
+                }
+            }
+        }
+    }
+    function parseNormal(content, id) {
+        var node, parsed, result, wrapped;
+        wrapped = 'async function _wpd_() {' + content + '\n}';
+        parsed = options.esprima.parseScript(wrapped, { loc: false });
+        result = parsed.body[0].body.body;
+        for (node of result) {
+            node.itemId = id;
+        }
+        return result;
+    }
+    function parseOutput(folder, id, item) {
+        if (item.content) {
+            item.content = 'setTimeout(() => {' + item.content + '}, 0);';
+        }
+        item.type = 'action';
+        parseItemContent(folder, id, item);
+    }
+    function parsePause(folder, id, item) {
+        if (item.content) {
+            item.content = 'await new Promise(resolve=>setTimeout(resolve,' + item.content + '))';
+            parseAction(folder, id, item);
+        }
+        item.type = 'action';
+    }
+    function parseQuestion(folder, id, item) {
+        parseItemContent(folder, id, item);
+        if (ensureHasContent(folder, id, item)) {
+            ensureExpression(folder, id, item);
+        }
+    }
+    function parseSInput(folder, id, item) {
+        parseItemContent(folder, id, item);
+        if (ensureHasContent(folder, id, item) && ensureExpression(folder, id, item) && ensureCall(folder, id, item)) {
+            folder.eventItems.push(id);
+        }
+    }
+    function parseSelect(folder, id, item) {
+        var expr, newContent, varName;
+        parseItemContent(folder, id, item);
+        if (ensureHasContent(folder, id, item) && ensureExpression(folder, id, item)) {
+            expr = item.content;
+            if (expr.type === 'Identifier') {
+                if (expr.name === 'receive') {
+                    folder.eventItems.push(id);
+                    collectReceiveCases(folder, item);
+                }
+            } else {
+                varName = generateId('_selectValue');
+                addLocal(folder.scope, varName);
+                item.content = createIdentifier(varName);
+                newContent = createAssignment(createIdentifier(varName), expr);
+                insertActionBefore(folder, id, newContent);
+            }
+        }
+    }
+    function parseStatement(code) {
+        var parsed, wrapped;
+        wrapped = 'async function wrp() { ' + code + '\n}';
+        parsed = options.esprima.parseScript(wrapped, { loc: false });
+        return parsed.body[0].body.body[0];
+    }
+    function pushAssi(variable, value, body) {
+        body.push(createExpression(createAssignment(createIdentifier(variable), value)));
+    }
+    async function readChildren(folder) {
+        var _collection_211, child, childPath, result;
+        result = [];
+        _collection_211 = folder.children;
+        for (childPath of _collection_211) {
+            child = await options.getObjectByHandle(childPath);
+            if (child) {
+                if (!(child.type === 'folder')) {
+                    enrichFolder(child);
+                }
+                result.push(child);
+            }
+        }
+        return result;
+    }
+    async function readClassFolder(parent, folder) {
+        var child, children, cls;
+        children = await readChildren(folder);
+        cls = findClassDiagram(children);
+        if (cls) {
+            reportError('class is not expected here', cls.path);
+        }
+        for (child of children) {
+            if (child.type === 'folder') {
+                await readClassFolder(parent, child);
+            } else {
+                addChild(parent, child);
+            }
+        }
+    }
+    async function readFolder(folder) {
+        var child, children, childrenByName;
+        checkCancellation();
+        children = await readChildren(folder);
+        childrenByName = {};
+        for (child of children) {
+            if (child.type === 'folder') {
+                await readFolder(child);
+            } else {
+                if (!child.keywords) {
+                    child.keywords = {};
+                }
+                if (!child.items) {
+                    child.items = {};
+                }
+            }
+            childrenByName[child.name] = child;
+        }
+        folder.children = childrenByName;
+    }
+    async function readHoloFolder(parent, folder) {
+        var child, children, cls;
+        children = await readChildren(folder);
+        cls = findClassDiagram(children);
+        if (cls) {
+            reportError('class is not expected here', cls.path);
+        }
+        for (child of children) {
+            if (child.type === 'folder') {
+                await readHoloFolder(parent, child);
+            } else {
+                addChild(parent, child);
+            }
+        }
+    }
+    async function readModuleFolder(parent, folder) {
+        var child, children, className, cls;
+        children = await readChildren(folder);
+        cls = findClassDiagram(children);
+        className = tryGetHoloClassName(folder.name);
+        if (className) {
+            if (!cls) {
+                cls = createEmptyFunction('class');
+            }
+            cls.keywords.export = true;
+            cls.type = 'class';
+            cls.name = className;
+            addChild(parent, cls);
+            for (child of children) {
+                if (child.type === 'folder') {
+                    await readModuleFolder(parent, child);
+                }
+            }
+            for (child of children) {
+                if (!(child.type === 'folder' || child.name === className)) {
+                    child.keywords.export = true;
+                    addChild(cls, child);
+                }
+            }
+        } else {
+            if (cls) {
+                className = folder.name;
+                cls.type = 'class';
+                cls.name = className;
+                addChild(parent, cls);
+                for (child of children) {
+                    if (child.type === 'folder') {
+                        await readModuleFolder(cls, child);
+                    } else {
+                        if (!(child.name === className)) {
+                            addChild(cls, child);
+                        }
+                    }
+                }
+            } else {
+                for (child of children) {
+                    if (child.type === 'folder') {
+                        await readModuleFolder(parent, child);
+                    } else {
+                        addChild(parent, child);
+                    }
+                }
+            }
+        }
+    }
+    async function readRootFolder() {
+        var child, children, module, rootFolder;
+        rootFolder = await options.getObjectByHandle(options.root);
+        module = createEmptyFunction('module');
+        module.type === 'module';
+        module.scope = createScope('module', 'module');
+        generateFunctionId(module);
+        children = await readChildren(rootFolder);
+        for (child of children) {
+            if (child.type === 'folder') {
+                await readModuleFolder(module, child);
+            } else {
+                if (child.name === 'class') {
+                    reportError('class is not expected here', child.path);
+                } else {
+                    if (child.name === 'module') {
+                        if (child.keywords.async) {
+                            reportError('module cannot be async', child.path);
+                        }
+                        if (child.params) {
+                            reportError('module cannot have arguments', child.path);
+                        }
+                        module.items = child.items;
+                    } else {
+                        addChild(module, child);
+                    }
+                }
+            }
+        }
+        return module;
+    }
+    function replaceReturnInAction(item) {
+        var _collection_173, _selectValue_175, index, stm;
+        if (item.type === 'action' && item.content) {
+            index = 0;
+            _collection_173 = item.content;
+            for (stm of _collection_173) {
+                _selectValue_175 = stm.type;
+                if (_selectValue_175 === 'ReturnStatement') {
+                    convertReturnToResolve(stm, '_topResolve_');
+                    item.content.splice(index + 1, 0, createReturn(null));
+                    return;
+                } else {
+                    if (_selectValue_175 === 'ThrowStatement') {
+                        convertReturnToResolve(stm, '_topReject_');
+                        item.content.splice(index + 1, 0, createReturn(null));
+                        return;
+                    }
+                }
+                index++;
+            }
+        }
+    }
+    function replaceReturnInMachine(fun) {
+        var _collection_177, id, item;
+        _collection_177 = fun.items;
+        for (id in _collection_177) {
+            item = _collection_177[id];
+            replaceReturnInAction(item);
+        }
+    }
+    function reportBadLoop(folder, id, item) {
+        reportError('Error in loop icon', folder.path, id);
+        delete item.content;
+    }
+    function reportError(message, filename, nodeId, data) {
+        state = undefined;
+        failed = true;
+        options.onError({
+            message: message,
+            filename: filename,
+            nodeId: nodeId,
+            data: data
+        });
+    }
+    function resetNextId() {
+        nextId = 2;
+    }
+    function rewriteEventCase(folder, caseId, caseItem, name) {
+        var content, lines;
+        caseItem.content = createStringLiteral(name);
+        lines = [];
+        assignEventArguments(folder, name, lines);
+        content = linesToContent(folder, caseId, lines);
+        insertActionAfter(folder, caseId, content);
+    }
+    function rewriteEventInput(folder, id, item, name) {
+        var lines;
+        addLocal(folder.scope, '_event_');
+        lines = [
+            'me.state = "' + id + '"',
+            'me._busy = false',
+            '_event_ = yield'
+        ];
+        assignEventArguments(folder, name, lines);
+        item.content = linesToContent(folder, id, lines);
+        item.type = 'action';
+    }
+    async function run() {
+        var ast, deps, module, src;
+        if (!(state === 'idle')) {
+            throw new Error('Invalid state');
+        }
+        state = 'started';
+        module = await readRootFolder();
+        if (mustStop()) {
+        } else {
+            parseItems(module);
+            await pause(1);
+            if (mustStop()) {
+            } else {
+                buildModuleAst(module);
+                await pause(1);
+                if (mustStop()) {
+                } else {
+                    addVariableDeclarations(module);
+                    ast = combineModuleAst(module);
+                    await pause(1);
+                    if (mustStop()) {
+                    } else {
+                        src = options.escodegen.generate(ast);
+                        src = addExports(module, src);
+                        if (isIife()) {
+                            src = '(function() {\n' + src + '\n})();';
+                        } else {
+                            if (isUnit()) {
+                                deps = getDepDeclarations();
+                                src = 'function ' + options.name + '() {\nvar unit = {};\n' + deps + src + '\nreturn unit;\n}';
+                                src = appendModuleExport(src, options.name);
+                            }
+                        }
+                        await options.onData(src);
+                    }
+                }
+            }
+        }
+    }
+    function scanForAssignments(step, node) {
+        var _selectValue_193, nextStep, varName;
+        if (node.itemId) {
+            step.itemId = node.itemId;
+        }
+        _selectValue_193 = node.type;
+        if (_selectValue_193 === 'AssignmentExpression') {
+            if (node.left.type === 'Identifier') {
+                varName = node.left.name;
+                if (!isDeclared(step, varName)) {
+                    addLocal(step.scope, varName);
+                }
+            }
+            return true;
+        } else {
+            if (_selectValue_193 === 'CallExpression') {
+                if (node.callee.type === 'Identifier' && node.callee.name === 'getHandlerData') {
+                    node.type = 'Identifier';
+                    node.name = '_handlerData_';
+                    delete node.callee;
+                    delete node.arguments;
+                    return false;
+                } else {
+                    return true;
+                }
+            } else {
+                if (_selectValue_193 === 'VariableDeclaration') {
+                    if (step.canDeclare) {
+                        extractVariablesFromDeclaration(node, step.scope);
+                    } else {
+                        reportError('var, const, let are not allowed here', step.path, step.itemId);
+                    }
+                    return true;
+                } else {
+                    if (_selectValue_193 === 'AwaitExpression') {
+                        if (!step.canAwait) {
+                            reportError('await is allowed only in async functions', step.path, step.itemId);
+                        }
+                        return true;
+                    } else {
+                        if ((_selectValue_193 === 'FunctionExpression' || _selectValue_193 === 'ArrowFunctionExpression' || _selectValue_193 === 'FunctionDeclaration') && node.body.type === 'BlockStatement') {
+                            nextStep = createScopeStepForLambda(step, node);
+                            nextStep.canAwait = node.async;
+                            addDeclarationsInFunction(nextStep);
+                            return false;
+                        } else {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    function setUpMachine(folder) {
+        var _collection_209, id, item;
+        if (folder.keywords.async) {
+            if (!(folder.eventItems.length === 0)) {
+                reportError('events are not allowed in async functions', folder.path, folder.eventItems[0]);
+            }
+        } else {
+            folder.events = {};
+            _collection_209 = folder.eventItems;
+            for (id of _collection_209) {
+                item = folder.items[id];
+                if (item.type === 'select') {
+                    addSelectEvent(folder, item, id);
+                } else {
+                    addInputEvent(folder, item, id);
+                }
+            }
+            if (!(folder.eventItems.length === 0)) {
+                folder.isMachine = true;
+                folder.originalName = folder.name;
+            }
+        }
+    }
+    function simpleBranch(branch) {
+        if (branch.body.length === 0 || branch.body.length === 1 && branch.body[0].type === 'action') {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    function stop() {
+        state = undefined;
+    }
+    function stripExpression(node) {
+        if (node.type === 'ExpressionStatement') {
+            return node.expression;
+        } else {
+            return node;
+        }
+    }
+    function traverseAst(obj, visitor) {
+        var item, key, recurse, value;
+        if (obj) {
+            if (Array.isArray(obj)) {
+                for (item of obj) {
+                    traverseAst(item, visitor);
+                }
+            } else {
+                if (typeof obj === 'object' && obj.type) {
+                    recurse = visitor(obj);
+                    if (recurse) {
+                        for (key in obj) {
+                            value = obj[key];
+                            traverseAst(value, visitor);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    function tryAddIdentifier(scope, item) {
+        if (item.type === 'Identifier') {
+            addDeclaration(scope, item.name);
+        }
+    }
+    function tryGetHoloClassName(name) {
+        if (name.startsWith('class ')) {
+            return name.substring('class '.length);
+        } else {
+            return undefined;
+        }
+    }
+    self.run = run;
+    self.stop = stop;
+    return self;
+}
+function pause(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+function splitTrim(text, separator) {
+    var parts, trimmed;
+    text = text || '';
+    parts = text.split(separator);
+    trimmed = parts.map(part => part.trim());
+    return trimmed.filter(part => Boolean(part));
+}
+module.exports = { Js2604Generator };
+},{"./tools":28}],7:[function(require,module,exports){
+const {read_project} = require("./kumir2606/reader")
+const {parse_items} = require("./kumir2606/parser")
+const {build_module_tree} = require("./kumir2606/tree")
+const {build_module_code} = require("./kumir2606/printer")
+
+function pause(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+
+async function generate_kumir(options) {
+    var project;
+    var parse_result;
+    var tree;
+    var module_src;
+
+    project = await read_project(options);
+    if (project.errors && project.errors.length) {
+        return {
+            errors: project.errors
+        };
+    }
+
+    await pause(1);
+
+    parse_result = parse_items(
+        project.module,
+        options
+    );
+    if (parse_result.errors && parse_result.errors.length) {
+        return {
+            errors: parse_result.errors
+        };
+    }
+
+
+
+    await pause(1);
+
+    tree = build_module_tree(
+        project.module,
+        options
+    );
+    if (tree.errors && tree.errors.length) {
+        return {
+            errors: tree.errors
+        };
+    }
+
+    await pause(1);
+    module_src = build_module_code(
+        tree.module,
+        options
+    );
+    if (module_src.errors && module_src.errors.length) {
+        return {
+            errors: module_src.errors
+        };
+    }
+
+    return {
+        code: module_src.code
+    };
+}
+
+async function wrapKumirGenerator(options) {
+    var result
+    try {
+        result = await generate_kumir(options)
+    } catch (ex) {
+        options.onError({
+            message: ex.message,
+            filename: ex.filename,
+            nodeId: ex.nodeId,
+            data: ex.data
+        })
+        return
+    }
+    if (result.errors && result.errors.length != 0) {
+        for (var error of result.errors) {
+            options.onError(error)
+        }
+    } else {
+        await options.onData(result.code)
+    }
+}
+
+
+function Kumir2606Generator(options) {
+    var self = { _type: 'Kumir2606Generator' };
+    self.run = () => wrapKumirGenerator(options)
+    self.stop = function() {}
+    return self
+}
+
+module.exports = { Kumir2606Generator };
+},{"./kumir2606/parser":8,"./kumir2606/printer":9,"./kumir2606/reader":10,"./kumir2606/tree":11}],8:[function(require,module,exports){
+"use strict";
+
+var error_list = [];
+var global_options = undefined;
+
+function parse_items(module, options) {
+    var name;
+    var fun;
+
+    global_options = options;
+    error_list = [];
+
+    for (name in module.functions) {
+        fun = module.functions[name];
+        parse_items_in_document(fun);
+    }
+
+    return {
+        errors: error_list
+    };
+}
+
+function parse_arguments(doc) {
+    var lines;
+    var args;
+    var line;
+    var arg;
+    var parts;
+    var i;
+    var arg_set;
+
+    if (doc.params) {
+        lines = doc.params.split(/\r\n|\n|\r/);
+    } else {
+        lines = [];
+    }
+
+    args = [];
+    arg_set = {};
+
+    for (i = 0; i < lines.length; i++) {
+        line = lines[i];
+        arg = line.trim();
+
+        if (arg) {
+            if (arg.startsWith("знач ")) {
+                if (doc.returns) {
+                    report_error(
+                        "Тип возвращаемого значения уже определен",
+                        doc.path,
+                        "params",
+                        arg
+                    );
+                } else {
+                    parts = arg.split(" ");
+                    doc.returns = parts[1].trim();
+                }
+            } else {
+                if (arg in arg_set) {
+                    report_error(
+                        "Аргумент неуникальный",
+                        doc.path,
+                        "params",
+                        arg
+                    );
+                }
+
+                args.push(arg);
+                arg_set[arg] = true;
+            }
+        }
+    }
+
+    doc.args = args;
+}
+
+function parse_items_in_document(doc) {
+    var item_id;
+    var item;
+
+    parse_arguments(doc);
+
+    for (item_id in doc.items) {
+        item = doc.items[item_id];
+
+        if (item.type === "end") {
+            item.type = "exit";
+        }
+    }
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+module.exports = {
+    parse_items: parse_items
+};
+},{}],9:[function(require,module,exports){
+"use strict";
+
+function build_module_code(root, options) {
+    var lines;
+    var node;
+    var code;
+    var i;
+
+    lines = [];
+
+    for (i = 0; i < root.body.length; i++) {
+        node = root.body[i];
+        print_node(node, 0, lines);
+    }
+
+    code = lines.join("\n");
+
+    return {
+        code: code
+    };
+}
+
+function add_line(context, text) {
+    var indent;
+    var line;
+    var i;
+
+    indent = "";
+
+    for (i = 0; i < context.depth * 4; i++) {
+        indent += " ";
+    }
+
+    line = indent + text;
+    context.lines.push(line);
+}
+
+function print_action(context) {
+    var node;
+    var parts;
+    var part;
+    var i;
+
+    node = context.node;
+
+    if (node.content) {
+        parts = node.content.split("\n");
+
+        for (i = 0; i < parts.length; i++) {
+            part = parts[i];
+            add_line(context, part);
+        }
+    }
+}
+
+function print_body(context, body) {
+    var child;
+    var child_context;
+    var i;
+
+    for (i = 0; i < body.length; i++) {
+        child = body[i];
+
+        child_context = {
+            node: child,
+            depth: context.depth + 1,
+            lines: context.lines
+        };
+
+        print_node_with_context(child_context);
+    }
+}
+
+function print_exit(context) {
+    add_line(context, "выход");
+}
+
+function print_function(context) {
+    var node;
+    var args;
+    var line;
+
+    node = context.node;
+
+    add_line(context, "");
+
+    args = node.args.join(", ");
+
+    if (args) {
+        args = "(" + args + ")";
+    }
+
+    if (node.returns) {
+        line = "алг " + node.returns + " " + node.name + args;
+    } else {
+        line = "алг " + node.name + args;
+    }
+
+    add_line(context, line);
+    add_line(context, "нач");
+    print_body(context, node.body);
+    add_line(context, "кон");
+}
+
+function print_loop(context) {
+    var node;
+
+    node = context.node;
+
+    add_line(context, "нц " + node.content);
+    print_body(context, node.body);
+    add_line(context, "кц");
+}
+
+function print_node(node, depth, lines) {
+    var context;
+
+    context = {
+        node: node,
+        depth: depth,
+        lines: lines
+    };
+
+    print_node_with_context(context);
+}
+
+function print_node_with_context(context) {
+    var node;
+
+    node = context.node;
+
+    if (node.type === "function") {
+        print_function(context);
+    } else if (node.type === "action") {
+        print_action(context);
+    } else if (node.type === "question") {
+        print_question(context);
+    } else if (node.type === "loop") {
+        print_loop(context);
+    } else if (node.type === "if-switch") {
+        print_switch(context);
+    } else if (node.type === "empty-line") {
+        add_line(context, "");
+    } else {
+        if (!(node.type === "exit")) {
+            throw Error("Unexpected case value: " + node.type);
+        }
+
+        print_exit(context);
+    }
+}
+
+function print_question(context) {
+    var node;
+    var parts;
+    var content;
+
+    node = context.node;
+
+    parts = node.content.split("\n");
+    content = parts.join(" ");
+
+    add_line(context, "если " + content + " то");
+
+    print_body(context, node.yes);
+
+    if (node.no.length !== 0) {
+        add_line(context, "иначе");
+        print_body(context, node.no);
+    }
+
+    add_line(context, "все");
+}
+
+function print_switch(context) {
+    var node;
+    var option;
+    var i;
+
+    node = context.node;
+
+    add_line(context, "выбор");
+
+    for (i = 0; i < node.options.length; i++) {
+        option = node.options[i];
+
+        add_line(context, "при " + option.condition + ":");
+        print_body(context, option.body);
+    }
+
+    if (node.other.length !== 0) {
+        add_line(context, "иначе");
+        print_body(context, node.other);
+    }
+
+    add_line(context, "все");
+}
+
+module.exports = {
+    build_module_code: build_module_code
+};
+},{}],10:[function(require,module,exports){
+"use strict";
+
+var error_list = [];
+var global_options = undefined;
+
+async function read_project(options) {
+    global_options = options;
+    error_list = [];
+
+    var root_folder = await read_object(global_options.root);
+    var module = create_module();
+
+    if (root_folder) {
+        await read_project_folder(module, root_folder);
+    }
+
+    if (error_list.length === 0) {
+        return {
+            module: module
+        };
+    } else {
+        return {
+            errors: error_list
+        };
+    }
+}
+
+function create_module() {
+    return {
+        header: undefined,
+        body: undefined,
+        functions: {}
+    };
+}
+
+function add_function(module, func) {
+    if (func.name in module.functions) {
+        report_error(
+            "Имя функции неуникально",
+            func.path,
+            undefined,
+            undefined
+        );
+    } else {
+        module.functions[func.name] = func;
+    }
+}
+
+async function read_children(node) {
+    var result;
+    var child_path;
+    var child;
+    var i;
+
+    if (node.children) {
+        result = [];
+
+        for (i = 0; i < node.children.length; i++) {
+            child_path = node.children[i];
+            child = await read_object(child_path);
+
+            if (child && (child.type === "drakon" || child.type === "folder")) {
+                result.push(child);
+            }
+        }
+
+        return result;
+    } else {
+        return [];
+    }
+}
+
+async function read_object(handle) {
+    var node;
+
+    node = await global_options.getObjectByHandle(handle);
+
+    if (node && node.type === "drakon") {
+        if (!node.keywords) {
+            node.keywords = {};
+        }
+
+        if (!node.items) {
+            node.items = {};
+        }
+    }
+
+    return node;
+}
+
+async function read_project_folder(module, folder) {
+    var children;
+    var child;
+    var i;
+
+    children = await read_children(folder);
+
+    for (i = 0; i < children.length; i++) {
+        child = children[i];
+
+        if (child.type === "folder") {
+            await read_project_folder(module, child);
+        } else {
+            add_function(
+                module,
+                child
+            );
+        }
+    }
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+module.exports = {
+    read_project: read_project
+};
+},{}],11:[function(require,module,exports){
+"use strict";
+
+var error_list = [];
+var global_options = undefined;
+
+function build_module_tree(module, options) {
+    var tree;
+    var header;
+    var start;
+    var names;
+    var name;
+    var fun;
+    var i;
+
+    global_options = options;
+    error_list = [];
+
+    tree = {
+        type: "module",
+        body: []
+    };
+
+    header = find_function_by_name(module, "заголовок");
+    if (header) {
+        generate_method_body(header, tree.body);
+    }
+
+    start = find_function_by_name(module, "старт");
+    if (start) {
+        build_method_tree(start, tree.body);
+    }
+
+    names = Object.keys(module.functions);
+    names.sort();
+
+    for (i = 0; i < names.length; i++) {
+        name = names[i];
+
+        if (!(name === "старт" || name === "заголовок")) {
+            fun = module.functions[name];
+            build_method_tree(fun, tree.body);
+        }
+    }
+
+    tree.body.push({
+        type: "empty-line"
+    });
+
+    if (error_list.length === 0) {
+        return {
+            module: tree
+        };
+    } else {
+        return {
+            errors: error_list
+        };
+    }
+}
+
+function add_action(content, body, final) {
+    var item;
+
+    item = {
+        type: "action",
+        content: content,
+        final: final || false
+    };
+
+    body.push(item);
+}
+
+function build_method_tree(method, output) {
+    var tree;
+
+    tree = {
+        type: "function",
+        keywords: method.keywords,
+        name: method.name,
+        args: method.args,
+        returns: method.returns,
+        body: []
+    };
+
+    output.push(tree);
+    generate_method_body(method, tree.body);
+}
+
+function complex_silhouette_to_tree(context, body) {
+    var first_branch;
+    var branches;
+    var state_var;
+    var loop;
+    var switch_item;
+    var branch;
+    var condition;
+    var option;
+    var i;
+
+    first_branch = context.branches[0];
+
+    if (first_branch.refs === 0) {
+        convert_tree(context, first_branch.body, body);
+
+        branches = [];
+        for (i = 1; i < context.branches.length; i++) {
+            branches.push(context.branches[i]);
+        }
+    } else {
+        branches = context.branches;
+    }
+
+    state_var = context.state_var;
+
+    loop = {
+        type: "loop",
+        content: "пока да",
+        body: []
+    };
+    body.push(loop);
+
+    switch_item = {
+        type: "if-switch",
+        options: [],
+        other: []
+    };
+    loop.body.push(switch_item);
+
+    for (i = 0; i < branches.length; i++) {
+        branch = branches[i];
+
+        condition = state_var + " = \"" + branch.name + "\"";
+
+        option = {
+            type: "option",
+            condition: condition,
+            body: []
+        };
+
+        switch_item.options.push(option);
+        convert_tree(context, branch.body, option.body);
+    }
+
+    add_action(
+        "вывод \"Неверное значение метки силуэта: \" + " + state_var + ", нс",
+        switch_item.other,
+        true
+    );
+
+    add_action(
+        "выход",
+        switch_item.other,
+        true
+    );
+}
+
+function convert_tree(context, nodes, body) {
+    var node;
+    var content;
+    var final;
+    var item;
+    var next_branch;
+    var i;
+
+    for (i = 0; i < nodes.length; i++) {
+        node = nodes[i];
+
+        if (node.type === "action") {
+            content = node.content;
+            final = is_final(context.doc, node);
+
+            item = {
+                content: content,
+                type: node.type,
+                final: final
+            };
+
+            body.push(item);
+        } else if (node.type === "exit") {
+            if (!context.simple) {
+                item = {
+                    type: node.type,
+                    final: true
+                };
+
+                if (!has_final(body)) {
+                    body.push(item);
+                }
+            }
+        } else if (node.type === "question") {
+            content = qc(node.content);
+
+            item = {
+                content: content,
+                type: node.type,
+                yes: [],
+                no: []
+            };
+
+            convert_tree(context, node.yes, item.yes);
+            convert_tree(context, node.no, item.no);
+
+            body.push(item);
+        } else if (node.type === "loop") {
+            content = node.content || "пока да";
+
+            item = {
+                type: "loop",
+                content: content,
+                body: []
+            };
+
+            convert_tree(context, node.body, item.body);
+            body.push(item);
+        } else if (node.type === "address") {
+            if (!has_final(body)) {
+                if (context.simple) {
+                    next_branch = find_branch_by_name(context.branches, node.content);
+
+                    if (next_branch) {
+                        convert_tree(context, next_branch.body, body);
+                    } else {
+                        report_error(
+                            "Ветка не найдена: " + node.content,
+                            context.doc.path,
+                            node.id,
+                            undefined
+                        );
+                    }
+                } else {
+                    add_action(
+                        context.state_var + " := \"" + node.content + "\"",
+                        body,
+                        false
+                    );
+                }
+            }
+        } else if (node.type === "break") {
+            if (!has_final(body)) {
+                add_action("выход", body, true);
+            }
+        } else if (node.type === "error") {
+            add_action(
+                "вывод \"" + node.message + "\", " + node.content + ", нс",
+                body,
+                true
+            );
+        } else {
+            report_error(
+                "Unexpected node type: " + node.type,
+                context.doc.path,
+                node.id,
+                undefined
+            );
+        }
+    }
+}
+
+function drakon_to_tree(doc) {
+    var tmp;
+    var json;
+    var options;
+    var raw_tree_json;
+
+    tmp = {
+        items: doc.items
+    };
+
+    json = JSON.stringify(tmp);
+    options = {};
+
+    raw_tree_json = global_options.toTree(
+        json,
+        doc.name,
+        doc.path,
+        "ru",
+        options
+    );
+
+    return JSON.parse(raw_tree_json);
+}
+
+function find_function_by_name(module, name) {
+    return module.functions[name];
+}
+
+function generate_method_body(doc, output) {
+    var raw_tree;
+    var first;
+    var context;
+
+    if (doc) {
+        raw_tree = drakon_to_tree(doc);
+
+        if (raw_tree.branches.length === 0) {
+            return;
+        }
+
+        first = raw_tree.branches[0];
+
+        if (raw_tree.branches.length === 1) {
+            context = {
+                doc: doc,
+                simple: true,
+                branches: raw_tree.branches
+            };
+
+            convert_tree(context, first.body, output);
+        } else if (is_simple_silhouette(raw_tree)) {
+            context = {
+                doc: doc,
+                simple: true,
+                branches: raw_tree.branches
+            };
+
+            convert_tree(context, first.body, output);
+        } else {
+            add_action(
+                "лит _ветка_ = \"" + first.name + "\"",
+                output,
+                false
+            );
+
+            context = {
+                doc: doc,
+                simple: false,
+                branches: raw_tree.branches,
+                state_var: "_ветка_ "
+            };
+
+            complex_silhouette_to_tree(context, output);
+        }
+    }
+}
+
+function has_final(body) {
+    var last;
+
+    if (body.length === 0) {
+        return false;
+    }
+
+    last = body[body.length - 1];
+
+    if (last.final) {
+        return true;
+    }
+
+    if (last.type === "question" && has_final(last.yes) && has_final(last.no)) {
+        return true;
+    }
+
+    return false;
+}
+
+function is_final(doc, node) {
+    var item;
+
+    if (node.id) {
+        item = doc.items[node.id];
+
+        if (item && item.content && item.content === "выход") {
+            return true;
+        }
+
+        return false;
+    }
+
+    return false;
+}
+
+function is_simple_silhouette(raw_tree) {
+    var first_branch;
+    var branch;
+    var last_index;
+    var i;
+
+    first_branch = raw_tree.branches[0];
+
+    if (first_branch.refs > 0) {
+        return false;
+    }
+
+    last_index = raw_tree.branches.length - 1;
+
+    for (i = 0; i < raw_tree.branches.length; i++) {
+        branch = raw_tree.branches[i];
+
+        if (!(!(branch.refs > 1) || (i === last_index && !(branch.body.length > 2)))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function qc(content) {
+    var operand;
+    var left;
+    var right;
+
+    if (typeof content === "string") {
+        return content;
+    }
+
+    if (content.operator === "not") {
+        operand = qc(content.operand);
+        return "не (" + operand + ")";
+    }
+
+    if (content.operator === "and") {
+        left = qc(content.left);
+        right = qc(content.right);
+        return "(" + left + ") и (" + right + ")";
+    }
+
+    if (content.operator === "or") {
+        left = qc(content.left);
+        right = qc(content.right);
+        return "(" + left + ") или (" + right + ")";
+    }
+
+    if (content.operator === "equal") {
+        left = qc(content.left);
+        right = qc(content.right);
+        return left + " = " + right;
+    }
+
+    report_error(
+        "Unexpected case value: " + content.operator,
+        undefined,
+        undefined,
+        content
+    );
+
+    return "";
+}
+
+function find_branch_by_name(branches, name) {
+    var branch;
+    var i;
+
+    for (i = 0; i < branches.length; i++) {
+        branch = branches[i];
+
+        if (branch.name === name) {
+            return branch;
+        }
+    }
+
+    return undefined;
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+module.exports = {
+    build_module_tree: build_module_tree
+};
+},{}],12:[function(require,module,exports){
+const {read_project} = require("./lua2604/reader")
+const {parse_items} = require("./lua2604/parser")
+const {build_module_tree} = require("./lua2604/tree")
+const {build_module_code} = require("./lua2604/printer")
+
+function pause(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+
+async function generate_lua(options) {
+    var project;
+    var parse_result;
+    var tree;
+    var module_src;
+
+    project = await read_project(options);
+    if (project.errors && project.errors.length) {
+        return {
+            errors: project.errors
+        };
+    }
+
+    await pause(1);
+
+    parse_result = parse_items(
+        project.module,
+        options
+    );
+    if (parse_result.errors && parse_result.errors.length) {
+        return {
+            errors: parse_result.errors
+        };
+    }
+
+
+
+    await pause(1);
+
+    tree = build_module_tree(
+        project.module,
+        options
+    );
+    if (tree.errors && tree.errors.length) {
+        return {
+            errors: tree.errors
+        };
+    }
+
+    await pause(1);
+    module_src = build_module_code(
+        tree.module,
+        options
+    );
+    if (module_src.errors && module_src.errors.length) {
+        return {
+            errors: module_src.errors
+        };
+    }
+
+    return {
+        code: module_src.code
+    };
+}
+
+async function wrapLuaGenerator(options) {
+    var result
+    try {
+        result = await generate_lua(options)
+    } catch (ex) {
+        options.onError({
+            message: ex.message,
+            filename: ex.filename,
+            nodeId: ex.nodeId,
+            data: ex.data
+        })
+        return
+    }
+    if (result.errors && result.errors.length != 0) {
+        for (var error of result.errors) {
+            options.onError(error)
+        }
+    } else {
+        await options.onData(result.code)
+    }
+}
+
+
+function Lua2604Generator(options) {
+    var self = { _type: 'Lua2604Generator' };
+    self.run = () => wrapLuaGenerator(options)
+    self.stop = function() {}
+    return self
+}
+
+module.exports = { Lua2604Generator };
+},{"./lua2604/parser":13,"./lua2604/printer":14,"./lua2604/reader":15,"./lua2604/tree":16}],13:[function(require,module,exports){
+var global_options = undefined;
+var error_list = [];
+var next_id = 0;
+
+function add_signature(doc, item_id, item, state_id) {
+    var expr = item.value;
+    var message;
+    var args;
+    var arg_str;
+    var message_info;
+    var i;
+    var argument;
+
+    if (expr && ((expr.type === "CallExpression" && expr.base) && expr.base.type === "Identifier")) {
+        message = expr.base.name;
+        args = [];
+
+        for (i = 0; i < expr.arguments.length; i++) {
+            argument = expr.arguments[i];
+
+            if (argument.type === "Identifier") {
+                args.push(argument.name);
+            } else {
+                report_error(
+                    "Only identifiers are allowed in incoming messages",
+                    doc.path,
+                    item_id
+                );
+                return null;
+            }
+        }
+
+        arg_str = args.join(",");
+
+        if (message in doc.messages) {
+            message_info = doc.messages[message];
+
+            if (message_info.arg_str === arg_str) {
+                message_info.states.push(state_id);
+                message_info.items.push(item.one);
+            } else {
+                report_error(
+                    "Signature mismatch in incoming message",
+                    doc.path,
+                    item_id
+                );
+            }
+        } else {
+            doc.messages[message] = {
+                message: message,
+                args: args,
+                arg_str: arg_str,
+                states: [state_id],
+                items: [item.one]
+            };
+        }
+
+        item.message = message;
+        return message;
+    } else {
+        report_error(
+            "A function call expression is expected here",
+            doc.path,
+            item_id
+        );
+        return null;
+    }
+}
+
+function can_declare(doc) {
+    if (doc.type === "module") {
+        return true;
+    } else {
+        if (doc.type === "class") {
+            return true;
+        } else {
+            return false;
+        }
+    }
+}
+
+function create_identifier(name) {
+    return {
+        type: "Identifier",
+        name: name
+    };
+}
+
+function extract_expression(context) {
+    var doc = context.doc;
+    var item_id = context.item_id;
+    var item = context.item;
+    var var_name;
+
+    if (!(item.value.type === "Identifier")) {
+        var_name = generate_random_var_name();
+        doc.scope.declarations[var_name] = "local";
+
+        insert_action_before(
+            doc,
+            item_id,
+            var_name + " = " + item.content
+        );
+
+        item.value = create_identifier(var_name);
+        item.content = var_name;
+    }
+}
+
+function find_cases(context) {
+    var item = context.item;
+    var current_case_id = item.one;
+    var case_item;
+
+    item.cases = [];
+
+    while (true) {
+        if (current_case_id) {
+            case_item = context.doc.items[current_case_id];
+            item.cases.push(current_case_id);
+            current_case_id = case_item.two;
+        } else {
+            break;
+        }
+    }
+}
+
+function find_declaration(step, name) {
+    var current = step;
+    var role;
+
+    while (true) {
+        if (current) {
+            role = current.scope.declarations[name];
+
+            if (role) {
+                return role;
+            } else {
+                current = current.parent;
+            }
+        } else {
+            return null;
+        }
+    }
+}
+
+function find_loop_end(doc, item_id, item) {
+    var depth = 1;
+    var current_id = item.one;
+    var current_item;
+
+    while (true) {
+        if (current_id) {
+            current_item = doc.items[current_id];
+
+            if (current_item.type === "loopbegin") {
+                depth++;
+            } else {
+                if (current_item.type === "loopend") {
+                    depth--;
+                }
+            }
+
+            if (depth === 0) {
+                return current_id;
+            } else {
+                current_id = current_item.one;
+            }
+        } else {
+            report_error(
+                "loop end icon not found",
+                doc.path,
+                item_id
+            );
+            return null;
+        }
+    }
+}
+
+function generate_random_var_name() {
+    next_id++;
+    return "_var" + next_id;
+}
+
+function get_messages_from_cases(doc, state_id, select) {
+    var i;
+    var case_id;
+    var item;
+
+    for (i = 0; i < select.cases.length; i++) {
+        case_id = select.cases[i];
+        item = doc.items[case_id];
+
+        add_signature(
+            doc,
+            case_id,
+            item,
+            state_id
+        );
+    }
+}
+
+function insert_action_before(doc, item_id, content, statements) {
+    var new_item_id;
+    var id;
+    var other_item;
+    var item;
+
+    next_id++;
+    new_item_id = item_id + "_" + next_id;
+
+    for (id in doc.items) {
+        other_item = doc.items[id];
+
+        if (other_item.one === item_id) {
+            other_item.one = new_item_id;
+        }
+
+        if (other_item.two === item_id) {
+            other_item.two = new_item_id;
+        }
+    }
+
+    item = {
+        type: "action",
+        one: item_id,
+        content: content,
+        statements: statements
+    };
+
+    doc.items[new_item_id] = item;
+}
+
+function is_iter(content) {
+    var parts;
+    content = content || ""
+	if (content.endsWith(")")) {
+		return true;
+	} else {
+		parts = content.split(",");
+		if (parts.length > 1) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+}
+
+function parse_arguments(doc) {
+    var lines;
+    var args;
+    var i;
+    var line;
+    var arg;
+
+    if (doc.params) {
+        lines = doc.params.split(/\r?\n/);
+        args = [];
+
+        for (i = 0; i < lines.length; i++) {
+            line = lines[i];
+            arg = line.trim();
+
+            if (!(arg === "")) {
+                if (args.indexOf(arg) !== -1) {
+                    report_error(
+                        "Argument is not unique",
+                        doc.path,
+                        "params",
+                        arg
+                    );
+                }
+
+                args.push(arg);
+            }
+        }
+
+        for (i = 0; i < args.length; i++) {
+            arg = args[i];
+            doc.scope.declarations[arg] = "arg";
+        }
+
+        doc.args = args;
+    } else {
+        doc.args = [];
+    }
+}
+
+function parse_item(doc, item_id, item) {
+    var content = item.content || "";
+    var context = {
+        doc: doc,
+        item_id: item_id,
+        item: item,
+        content: content
+    };
+
+    if (item.type === "action") {
+        if (!(content === "")) {
+            item.statements = parse_statements(context);
+        }
+    } else if (item.type === "question") {
+        if (content === "") {
+            report_error("Icon cannot be empty", doc.path, item_id);
+        } else {
+            item.value = parse_value(context);
+        }
+    } else if (item.type === "select") {
+        parse_select(context);
+    } else if (item.type === "case") {
+        if (content === "") {
+            if (item.two) {
+                report_error("Icon cannot be empty", doc.path, item_id);
+            }
+        } else {
+            item.value = parse_value(context);
+        }
+    } else if (item.type === "loopbegin") {
+        if (content === "") {
+            report_error("Icon cannot be empty", doc.path, item_id);
+        } else {
+            parse_loop(context);
+        }
+    } else if (item.type === "sinput") {
+        if (content === "") {
+            report_error("Icon cannot be empty", doc.path, item_id);
+        } else {
+            parse_sinput(context);
+        }
+    } else if (item.type === "branch") {
+        doc.branches.push(item_id);
+    }
+}
+
+function parse_items(doc, options) {
+    global_options = options;
+    error_list = [];
+    next_id = 0;
+
+    traverse_document_tree(doc);
+
+    if (error_list.length === 0) {
+        process_assignments(
+            doc,
+            null
+        );
+    }
+
+    return {
+        errors: error_list
+    };
+}
+
+function traverse_document_tree(doc) {
+    var key;
+    var member;
+
+    parse_items_in_document(doc);
+
+    if (doc.members) {
+        for (key in doc.members) {
+            member = doc.members[key];
+            traverse_document_tree(member);
+        }
+    }
+}
+
+function parse_items_in_document(doc) {
+    var item_ids;
+    var i;
+    var item_id;
+    var item;
+
+    doc.scope = {
+        name: doc.name,
+        declarations: {}
+    };
+    doc.messages = {};
+    doc.states = [];
+    doc.branches = [];
+
+    parse_arguments(doc);
+
+    item_ids = Object.keys(doc.items);
+
+    for (i = 0; i < item_ids.length; i++) {
+        item_id = item_ids[i];
+        item = doc.items[item_id];
+        parse_item(doc, item_id, item);
+    }
+
+    read_cases(doc);
+}
+
+function parse_loop(context) {
+    var doc = context.doc;
+    var item_id = context.item_id;
+    var item = context.item;
+    var content = context.content;
+    var parts = content.split(";");
+
+    if (parts.length === 2) {
+        parse_iterator_loop(doc, item_id, item, parts);
+    } else if (parts.length === 3) {
+        parse_for_loop(doc, item_id, item, parts);
+    } else {
+        report_error(
+            "Bad format",
+            doc.path,
+            item_id
+        );
+    }
+}
+
+function parse_iterator_loop(doc, item_id, item, parts) {
+    var variables = parts[0].split(",");
+    var expression = parts[1].trim();
+    var collection;
+
+    if (variables.length === 1) {
+        item.var1 = variables[0].trim();
+        doc.scope.declarations[item.var1] = "loop";
+        item.content = expression;
+        item.subtype = "array";
+        item.value = parse_value({
+            doc: doc,
+            item_id: item_id,
+            item: item,
+            content: expression
+        });
+
+        if (is_iter(item.content)) {
+            collection = item.content;
+        } else {
+            collection = "ipairs(" + item.content + ")";
+        }
+
+        item.content = "for _, " + item.var1 + " in " + collection + " do";
+    } else if (variables.length === 2) {
+        item.var1 = variables[0].trim();
+        doc.scope.declarations[item.var1] = "loop";
+
+        item.var2 = variables[1].trim();
+        doc.scope.declarations[item.var2] = "loop";
+
+        item.content = expression;
+        item.subtype = "map";
+        item.value = parse_value({
+            doc: doc,
+            item_id: item_id,
+            item: item,
+            content: expression
+        });
+
+        if (is_iter(item.content)) {
+            collection = item.content;
+        } else {
+            collection = "pairs(" + item.content + ")";
+        }
+
+        item.content = "for " + item.var1 + ", " + item.var2 + " in " + collection + " do";
+    } else {
+        report_error(
+            "Bad format",
+            doc.path,
+            item_id
+        );
+    }
+}
+
+function parse_for_loop(doc, item_id, item, parts) {
+    var expression1 = parts[0].trim();
+    var expression2 = parts[1].trim();
+    var expression3 = parts[2].trim();
+    var ast1;
+    var ast2;
+    var ast3;
+    var end_id;
+
+    item.subtype = "for";
+
+    ast1 = parse_statements({
+        doc: doc,
+        item_id: item_id,
+        item: item,
+        content: expression1
+    });
+
+    ast2 = parse_value({
+        doc: doc,
+        item_id: item_id,
+        item: item,
+        content: expression2
+    });
+
+    ast3 = parse_statements({
+        doc: doc,
+        item_id: item_id,
+        item: item,
+        content: expression3
+    });
+
+    item.value = ast2;
+    item.content = "while " + expression2 + " do";
+
+    insert_action_before(
+        doc,
+        item_id,
+        expression1,
+        ast1
+    );
+
+    end_id = find_loop_end(doc, item_id, item);
+
+    if (end_id) {
+        insert_action_before(
+            doc,
+            end_id,
+            expression3,
+            ast3
+        );
+    }
+}
+
+function parse_lua(text) {
+    return global_options.parseLua(text);
+}
+
+function parse_select(context) {
+    var doc = context.doc;
+    var item_id = context.item_id;
+    var item = context.item;
+    var content = context.content;
+
+    if (content === "") {
+        report_error(
+            "Icon cannot be empty",
+            doc.path,
+            item_id
+        );
+    } else {
+        item.value = parse_value(context);
+        extract_expression(context);
+        find_cases(context);
+
+        if (content === "receive") {
+            doc.states.push(item_id);
+        }
+    }
+}
+
+function parse_sinput(context) {
+    var doc = context.doc;
+    var item_id = context.item_id;
+    var item = context.item;
+
+    item.value = parse_value(context);
+
+    if (add_signature(doc, item_id, item, item_id)) {
+        doc.states.push(item_id);
+    }
+}
+
+function parse_statements(context) {
+    var wrapped = "function _wrap_() " + context.content + " end";
+    var ast;
+
+    try {
+        ast = parse_lua(wrapped);
+        return ast.body[0].body;
+    } catch (error) {
+        report_error(
+            error.message,
+            context.doc.path,
+            context.item_id
+        );
+        return null;
+    }
+}
+
+function parse_value(context) {
+    var wrapped = "x=" + context.content;
+    var ast;
+
+    try {
+        ast = parse_lua(wrapped);
+        return ast.body[0].init[0];
+    } catch (error) {
+        report_error(
+            error.message,
+            context.doc.path,
+            context.item_id
+        );
+        return null;
+    }
+}
+
+function process_assignment(step, item_id, assignment) {
+    var i;
+    var item;
+    var var_type;
+
+    for (i = 0; i < assignment.variables.length; i++) {
+        item = assignment.variables[i];
+
+        if (item.type === "Identifier") {
+            var_type = find_declaration(step, item.name);
+
+            if (var_type) {
+                if (var_type === "loop") {
+                    report_error(
+                        "Cannot assign to loop variable",
+                        step.path,
+                        item_id
+                    );
+                }
+            } else {
+                step.scope.declarations[item.name] = "local";
+            }
+        }
+    }
+}
+
+function process_assignments(doc, parent) {
+    var step;
+    var item_id;
+    var item;
+    var key;
+    var member;
+
+    step = {
+        parent: parent,
+        scope: doc.scope,
+        declares: can_declare(doc),
+        path: doc.path
+    };
+
+    for (item_id in doc.items) {
+        item = doc.items[item_id];
+
+        if (item.type === "action" && item.statements) {
+            scan_assignments(step, item_id, item);
+        }
+    }
+
+    if (doc.members) {
+        for (key in doc.members) {
+            member = doc.members[key];
+            process_assignments(member, step);
+        }
+    }
+}
+
+function process_declaration(step, item_id, declaration) {
+    var i;
+    var variable;
+    var name;
+
+    if (step.declares) {
+        for (i = 0; i < declaration.variables.length; i++) {
+            variable = declaration.variables[i];
+
+            if (typeof variable === "string") {
+                name = variable;
+            } else {
+                name = variable.name;
+            }
+
+            step.scope.declarations[name] = "declared";
+        }
+    } else {
+        report_error(
+            "Variable declarations are not allowed in function body",
+            step.path,
+            item_id
+        );
+    }
+}
+
+function read_cases(doc) {
+    var i;
+    var item_id;
+    var item;
+
+    for (i = 0; i < doc.states.length; i++) {
+        item_id = doc.states[i];
+        item = doc.items[item_id];
+
+        if (item.type === "select") {
+            get_messages_from_cases(
+                doc,
+                item_id,
+                item
+            );
+        }
+    }
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+function scan_assignments(step, item_id, item) {
+    var i;
+    var statement;
+
+    for (i = 0; i < item.statements.length; i++) {
+        statement = item.statements[i];
+
+        if (statement.type === "AssignmentStatement") {
+            process_assignment(step, item_id, statement);
+        } else if (statement.type === "LocalStatement") {
+            process_declaration(step, item_id, statement);
+        }
+    }
+}
+
+module.exports = {
+    parse_items: parse_items
+};
+
+},{}],14:[function(require,module,exports){
+function build_module_code(root, options) {
+    var lines = [];
+
+    for (var node of root.body) {
+        print_node(node, 0, lines);
+    }
+
+    return {
+        code: lines.join("\n")
+    };
+}
+
+function add_line(context, text) {
+    var depth = context.depth;
+    var lines = context.lines;
+    var indent = " ".repeat(depth * 4);
+    var line = indent + text;
+    lines.push(line);
+}
+
+function print_action(context) {
+    var node = context.node;
+
+    if (node.content) {
+        var parts = node.content.split("\n");
+        for (var part of parts) {
+            add_line(context, part);
+        }
+    }
+}
+
+function print_body(context, body) {
+    var depth = context.depth;
+    var lines = context.lines;
+
+    for (var child of body) {
+        print_node(child, depth + 1, lines);
+    }
+}
+
+function print_exit(context) {
+    add_line(context, "me.state = nil");
+    add_line(context, "me._buzy = false");
+    add_line(context, "return");
+}
+
+function print_function(context) {
+    var node = context.node;
+
+    add_line(context, "");
+
+    var args = node.args.join(", ");
+    if (node.self_name) {
+        add_line(context, node.self_name + "." + node.name + " = function(" + args + ")");
+    } else {
+        add_line(context, "function " + node.name + "(" + args + ")");
+    }
+
+    print_body(context, node.body);
+    add_line(context, "end");
+}
+
+function print_loop(context) {
+    var node = context.node;
+
+    add_line(context, node.content);
+    print_body(context, node.body);
+    add_line(context, "end");
+}
+
+function print_node(node, depth, lines) {
+    var context = {
+        node: node,
+        depth: depth,
+        lines: lines
+    };
+
+    if (node.type === "function") {
+        print_function(context);
+    } else {
+        if (node.type === "action") {
+            print_action(context);
+        } else {
+            if (node.type === "question") {
+                print_question(context);
+            } else {
+                if (node.type === "loop") {
+                    print_loop(context);
+                } else {
+                    if (node.type === "if-switch") {
+                        print_switch(context);
+                    } else {
+                        if (node.type === "empty-line") {
+                            add_line(context, "");
+                        } else {
+                            if (!(node.type === "exit")) {
+                                throw new Error("Unexpected case value: " + node.type);
+                            }
+                            print_exit(context);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+function print_question(context) {
+    var node = context.node;
+    var parts = node.content.split("\n");
+    var content = parts.join(" ");
+
+    add_line(context, "if " + content + " then");
+    print_body(context, node.yes);
+
+    if (!(node.no.length === 0)) {
+        add_line(context, "else");
+        print_body(context, node.no);
+    }
+
+    add_line(context, "end");
+}
+
+function print_switch(context) {
+    var node = context.node;
+    var first = true;
+
+    for (var option of node.options) {
+        if (first) {
+            add_line(context, "if " + option.condition + " then");
+            first = false;
+        } else {
+            add_line(context, "elseif " + option.condition + " then");
+        }
+
+        print_body(context, option.body);
+    }
+
+    if (!(node.other.length === 0)) {
+        add_line(context, "else");
+        print_body(context, node.other);
+    }
+
+    add_line(context, "end");
+}
+
+module.exports = {
+    build_module_code: build_module_code
+};
+},{}],15:[function(require,module,exports){
+var error_list = [];
+var global_options = undefined;
+var next_id = 1;
+
+async function read_project(options) {
+    var root_folder;
+    var children;
+    var module;
+    var other_children;
+    var i;
+    var child;
+
+    error_list = [];
+    global_options = options;
+
+    root_folder = await read_object(global_options.root);
+    children = await read_children(root_folder);
+
+    module = find_by_name(children, "module");
+
+    if (!module) {
+        module = create_document("module", "drakon");
+    }
+
+    module.type = "module";
+    initialize_document(module);
+
+    other_children = filter_name_not(children, "module");
+
+    for (i = 0; i < other_children.length; i += 1) {
+        child = other_children[i];
+
+        if (child.name === "class") {
+            report_error(
+                "class is not expected here",
+                child.path,
+                undefined,
+                undefined
+            );
+        } else {
+            if (child.type === "folder") {
+                await read_folder(module, child);
+            } else {
+                add_document(module, child);
+            }
+        }
+    }
+
+    if (error_list.length === 0) {
+        return {
+            module: module
+        };
+    }
+
+    return {
+        errors: error_list
+    };
+}
+
+function create_document(name, type) {
+    var document;
+
+    document = {};
+    document.name = name;
+    document.type = type;
+    document.path = "created-" + next_id;
+    next_id += 1;
+
+    document.items = {};
+    document.keywords = {};
+    document.params = undefined;
+    document.parent = undefined;
+    document.members = {};
+    document.scope = undefined;
+    document.args = [];
+
+    return document;
+}
+
+function initialize_document(document) {
+    if (!document.items) {
+        document.items = {};
+    }
+
+    if (!document.keywords) {
+        document.keywords = {};
+    }
+
+    if (!document.members) {
+        document.members = {};
+    }
+
+    if (!document.args) {
+        document.args = [];
+    }
+}
+
+function add_document(parent, document) {
+    var chain;
+    var i;
+    var element;
+
+    initialize_document(parent);
+    initialize_document(document);
+
+    chain = get_document_chain(parent);
+
+    for (i = 0; i < chain.length; i += 1) {
+        element = chain[i];
+
+        initialize_document(element);
+
+        if (has_own(element.members, document.name)) {
+            report_error(
+                "Name is not unique",
+                document.path,
+                undefined,
+                document.name
+            );
+            return;
+        }
+    }
+
+    parent.members[document.name] = document;
+    document.parent = parent;
+}
+
+function get_document_chain(document) {
+    var result;
+    var current;
+
+    result = [];
+    current = document;
+
+    while (current) {
+        result.push(current);
+        current = current.parent;
+    }
+
+    return result;
+}
+
+async function read_children(node) {
+    var result;
+    var i;
+    var child_path;
+    var child;
+
+    if (!node.children) {
+        return [];
+    }
+
+    result = [];
+
+    for (i = 0; i < node.children.length; i += 1) {
+        child_path = node.children[i];
+        child = await read_object(child_path);
+
+        if (child && (child.type === "drakon" || child.type === "folder")) {
+            result.push(child);
+        }
+    }
+
+    return result;
+}
+
+async function read_folder(parent, folder) {
+    var children;
+    var module;
+    var class_doc;
+    var other_children;
+    var i;
+    var child;
+
+    children = await read_children(folder);
+
+    module = find_by_name(children, "module");
+    class_doc = find_by_name(children, "class");
+    other_children = filter_not_module_or_class(children);
+
+    if (module) {
+        report_error(
+            "module not expected here",
+            module.path,
+            undefined,
+            undefined
+        );
+    }
+
+    if (class_doc) {
+        class_doc.name = folder.name;
+        class_doc.type = "class";
+        add_document(parent, class_doc);
+        parent = class_doc;
+    }
+
+    for (i = 0; i < other_children.length; i += 1) {
+        child = other_children[i];
+
+        if (child.type === "folder") {
+            await read_folder(parent, child);
+        } else {
+            add_document(parent, child);
+        }
+    }
+}
+
+async function read_object(handle) {
+    var node;
+
+    node = await global_options.getObjectByHandle(handle);
+
+    if (node && node.type === "drakon") {
+        if (!node.keywords) {
+            node.keywords = {};
+        }
+
+        if (!node.items) {
+            node.items = {};
+        }
+    }
+
+    return node;
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+function find_by_name(list, name) {
+    var i;
+    var item;
+
+    for (i = 0; i < list.length; i += 1) {
+        item = list[i];
+
+        if (item.name === name) {
+            return item;
+        }
+    }
+
+    return undefined;
+}
+
+function filter_name_not(list, name) {
+    var result;
+    var i;
+    var item;
+
+    result = [];
+
+    for (i = 0; i < list.length; i += 1) {
+        item = list[i];
+
+        if (item.name !== name) {
+            result.push(item);
+        }
+    }
+
+    return result;
+}
+
+function filter_not_module_or_class(list) {
+    var result;
+    var i;
+    var item;
+
+    result = [];
+
+    for (i = 0; i < list.length; i += 1) {
+        item = list[i];
+
+        if (item.name !== "module" && item.name !== "class") {
+            result.push(item);
+        }
+    }
+
+    return result;
+}
+
+function has_own(map, key) {
+    return Object.prototype.hasOwnProperty.call(map, key);
+}
+
+module.exports = {
+    read_project: read_project
+};
+},{}],16:[function(require,module,exports){
+"use strict";
+
+var global_options = undefined;
+var error_list = [];
+
+function add_action(content, body, final) {
+    var item;
+
+    item = {
+        type: "action",
+        content: content,
+        final: final || false
+    };
+
+    body.push(item);
+}
+
+function add_class_exports(exported, body) {
+    var name;
+
+    add_empty_line(body);
+
+    for (name of exported) {
+        add_action(
+            "self." + name + " = " + name,
+            body
+        );
+    }
+
+    add_action(
+        "return self",
+        body
+    );
+}
+
+function add_empty_line(body) {
+    var item;
+
+    item = {
+        type: "empty-line"
+    };
+
+    body.push(item);
+}
+
+function add_module_exports(exported, body) {
+    var lines;
+    var name;
+    var export_body;
+    var content;
+
+    add_empty_line(body);
+
+    lines = [];
+    for (name of exported) {
+        lines.push("    " + name + " = " + name);
+    }
+
+    export_body = lines.join(",\n");
+    content = "return {\n" + export_body + "\n}";
+
+    add_action(
+        content,
+        body
+    );
+}
+
+function add_self(doc, fun_node) {
+    var content;
+
+    content = "local self = {_type=\"" + doc.name + "\"}";
+    add_action(content, fun_node.body);
+}
+
+function add_subfunction(doc, entry_id, body, start_state) {
+    var sub;
+    var raw_tree;
+    var first;
+    var context;
+
+    sub = build_subfunction(
+        doc,
+        entry_id,
+        start_state
+    );
+
+    if (!(error_list.length === 0)) {
+        return;
+    }
+
+    raw_tree = drakon_to_tree(
+        sub,
+        true
+    );
+
+    if (raw_tree.branches.length === 1) {
+        first = raw_tree.branches[0];
+
+        context = {
+            doc: sub,
+            simple: true,
+            branches: raw_tree.branches,
+            state_var: "me.state"
+        };
+
+        convert_tree(
+            context,
+            first.body,
+            body
+        );
+    } else {
+        context = {
+            doc: sub,
+            simple: false,
+            branches: raw_tree.branches,
+            state_var: "me.state"
+        };
+
+        complex_silhouette_to_tree(
+            context,
+            body
+        );
+    }
+}
+
+function build_function_tree(doc) {
+    var fun_node;
+    var names;
+    var name;
+    var exported;
+    var member;
+    var member_node;
+
+    fun_node = create_function_node(doc);
+
+    names = Object.keys(doc.members);
+    names.sort();
+
+    if (is_machine(doc)) {
+        build_machine(
+            doc,
+            fun_node
+        );
+    } else {
+        build_normal_function(
+            doc,
+            fun_node
+        );
+    }
+
+    exported = [];
+
+    for (name of names) {
+        member = doc.members[name];
+
+        if (member.keywords.export) {
+            exported.push(name);
+        }
+
+        member_node = build_function_tree(member);
+        fun_node.body.push(member_node);
+    }
+
+    if (doc.type === "class") {
+        add_class_exports(exported, fun_node.body);
+    } else {
+        if (doc.type === "module") {
+            add_module_exports(exported, fun_node.body);
+        }
+    }
+
+    return fun_node;
+}
+
+function build_machine(doc, fun_node) {
+    var first_id;
+    var me_node;
+    var run;
+    var error_node;
+    var state_check;
+    var set_state_node;
+    var messages;
+    var message;
+    var message_method;
+    var stop_node;
+    var return_node;
+
+    first_id = find_first_node(doc);
+
+    declare_variables(
+        doc.scope,
+        fun_node.body
+    );
+
+    me_node = {
+        type: "action",
+        content: "local me = {state = \"created\", _buzy = true}"
+    };
+
+    fun_node.body.push(me_node);
+
+    run = create_function(
+        "run",
+        [],
+        "me"
+    );
+
+    error_node = {
+        type: "action",
+        content: "error(\"run() can be called only once\")"
+    };
+
+    state_check = {
+        type: "question",
+        content: "me.state ~= \"created\"",
+        yes: [error_node],
+        no: []
+    };
+
+    run.body.push(state_check);
+
+    set_state_node = {
+        type: "action",
+        content: "me.state = \"" + first_id + "\""
+    };
+
+    run.body.push(set_state_node);
+
+    add_subfunction(
+        doc,
+        first_id,
+        run.body,
+        first_id
+    );
+
+    fun_node.body.push(run);
+
+    messages = Object.keys(doc.messages);
+    messages.sort();
+
+    for (message of messages) {
+        message_method = build_message_method(
+            doc,
+            message
+        );
+
+        fun_node.body.push(message_method);
+    }
+
+    stop_node = {
+        type: "action",
+        content: "me.stop = function() me.state = nil end"
+    };
+
+    fun_node.body.push(stop_node);
+
+    return_node = {
+        type: "action",
+        content: "return me"
+    };
+
+    fun_node.body.push(return_node);
+}
+
+function build_message_method(doc, message) {
+    var message_info;
+    var method;
+    var error_node;
+    var state_check;
+    var switch_node;
+    var index;
+    var state_id;
+    var entry_id;
+    var option;
+    var reset_state;
+
+    message_info = doc.messages[message];
+
+    method = create_function(
+        message,
+        message_info.args,
+        "me"
+    );
+
+    error_node = {
+        type: "action",
+        content: "error(\"Synchronous reentry is not allowed\")"
+    };
+
+    state_check = {
+        type: "question",
+        content: "me._buzy",
+        yes: [error_node],
+        no: []
+    };
+
+    method.body.push(state_check);
+
+    switch_node = {
+        type: "if-switch",
+        options: [],
+        other: []
+    };
+
+    method.body.push(switch_node);
+
+    for (index = 0; index < message_info.states.length; index++) {
+        state_id = message_info.states[index];
+        entry_id = message_info.items[index];
+
+        option = {
+            type: "option",
+            condition: "me.state == \"" + state_id + "\"",
+            body: []
+        };
+
+        reset_state = {
+            type: "action",
+            content: "me._buzy = true"
+        };
+
+        option.body.push(reset_state);
+
+        add_subfunction(
+            doc,
+            entry_id,
+            option.body,
+            state_id
+        );
+
+        switch_node.options.push(option);
+    }
+
+    return method;
+}
+
+function build_module_tree(module, options) {
+    var tree;
+
+    global_options = options;
+    error_list = [];
+
+    tree = build_function_tree(module);
+
+    if (error_list.length === 0) {
+        return {
+            module: tree
+        };
+    } else {
+        return {
+            errors: error_list
+        };
+    }
+}
+
+function build_normal_function(doc, fun_node) {
+    var raw_tree;
+    var first;
+    var context;
+
+    raw_tree = drakon_to_tree(
+        doc,
+        false
+    );
+
+    if (doc.type === "class") {
+        add_self(doc, fun_node);
+    }
+
+    if (raw_tree.branches.length === 0) {
+        return;
+    }
+
+    first = raw_tree.branches[0];
+
+    if (raw_tree.branches.length === 1) {
+        declare_variables(
+            doc.scope,
+            fun_node.body
+        );
+
+        context = {
+            doc: doc,
+            simple: true
+        };
+
+        convert_tree(
+            context,
+            first.body,
+            fun_node.body
+        );
+    } else {
+        if (is_simple_silhouette(raw_tree)) {
+            declare_variables(
+                doc.scope,
+                fun_node.body
+            );
+
+            context = {
+                doc: doc,
+                simple: true,
+                branches: raw_tree.branches
+            };
+
+            convert_tree(
+                context,
+                first.body,
+                fun_node.body
+            );
+        } else {
+            doc.scope.declarations["_branch_"] = "local";
+
+            declare_variables(
+                doc.scope,
+                fun_node.body
+            );
+
+            add_action("_branch_ = \"" + first.name + "\"", fun_node.body);
+
+            context = {
+                doc: doc,
+                simple: false,
+                branches: raw_tree.branches,
+                state_var: "_branch_"
+            };
+
+            complex_silhouette_to_tree(context, fun_node.body);
+        }
+    }
+}
+
+function build_subfunction(doc, entry_id, start_state) {
+    var subfunction;
+    var context;
+
+    subfunction = {
+        name: doc.name,
+        path: doc.path,
+        items: {}
+    };
+
+    context = {
+        doc: doc,
+        input: doc.items,
+        output: subfunction.items
+    };
+
+    traverse_graph(
+        context,
+        entry_id,
+        copy_subfunction_node
+    );
+
+    subfunction.items["sub-start"] = {
+        type: "branch",
+        branchId: 0,
+        content: start_state,
+        one: entry_id
+    };
+
+    return subfunction;
+}
+
+function complex_silhouette_to_tree(context, body) {
+    var state_var = context.state_var;
+    var loop;
+    var switch_item;
+    var i;
+    var branch;
+    var condition;
+    var option;
+
+    loop = {
+        type: "loop",
+        content: "while true do",
+        body: []
+    };
+    body.push(loop);
+
+    switch_item = {
+        type: "if-switch",
+        options: [],
+        other: []
+    };
+    loop.body.push(switch_item);
+
+    for (i = 0; i < context.branches.length; i++) {
+        branch = context.branches[i];
+        condition = state_var + " == \"" + branch.name + "\"";
+
+        option = {
+            type: "option",
+            condition: condition,
+            body: []
+        };
+        switch_item.options.push(option);
+
+        add_action(state_var + " = nil", option.body, false);
+        convert_tree(context, branch.body, option.body);
+    }
+
+    add_action("return", switch_item.other, true);
+}
+
+function convert_tree(context, nodes, body) {
+    for (var node of nodes) {
+        if (node.type === "action") {
+            var content = node.content;
+            var final = is_final(context.doc, node);
+            var item = {
+                content: content,
+                type: node.type,
+                final: final
+            };
+            body.push(item);
+        } else {
+            if (node.type === "exit") {
+                var item = {
+                    type: node.type,
+                    final: true
+                };
+                body.push(item);
+            } else {
+                if (node.type === "event") {
+                    var state_id = node.content;
+                    var content = "me.state = \"" + state_id + "\"\nme._buzy = false\nreturn";
+                    var final = true;
+                    var item = {
+                        content: content,
+                        type: "action",
+                        final: final
+                    };
+                    body.push(item);
+                } else {
+                    if (node.type === "question") {
+                        var content = qc(node.content);
+                        var item = {
+                            content: content,
+                            type: node.type,
+                            yes: [],
+                            no: []
+                        };
+                        convert_tree(context, node.yes, item.yes);
+                        convert_tree(context, node.no, item.no);
+                        body.push(item);
+                    } else {
+                        if (node.type === "loop") {
+                            var content = node.content || "while true do";
+                            var item = {
+                                type: "loop",
+                                content: content,
+                                body: []
+                            };
+                            convert_tree(context, node.body, item.body);
+                            body.push(item);
+                        } else {
+                            if (node.type === "address") {
+                                if (!has_final(body)) {
+                                    if (context.simple) {
+                                        var next_branch = undefined;
+                                        for (var branch of context.branches) {
+                                            if (branch.name === node.content) {
+                                                next_branch = branch;
+                                                break;
+                                            }
+                                        }
+                                        convert_tree(context, next_branch.body, body);
+                                    } else {
+                                        add_action(context.state_var + " = \"" + node.content + "\"", body);
+                                    }
+                                }
+                            } else {
+                                if (node.type === "break") {
+                                    if (!has_final(body)) {
+                                        add_action("break", body, true);
+                                    }
+                                } else {
+                                    if (node.type === "error") {
+                                        add_action(
+                                            "error(\"" + node.message + ": \" .. tostring(" + node.content + "))",
+                                            body,
+                                            true
+                                        );
+                                    } else {
+                                        report_error(
+                                            "Unexpected node type: " + node.type,
+                                            context.doc.path,
+                                            node.id
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+function copy_subfunction_node(context, node_id, node) {
+    if (node.type === "sinput" || (node.type === "select" && node.content === "receive")) {
+        context.output[node_id] = {
+            type: "event",
+            content: node_id,
+            final: true
+        };
+        return false;
+    } else {
+        if (node.type === "arrow-loop" || node.type === "loopbegin") {
+            report_error(
+                "This item is not allowed in a state machine",
+                context.doc.path,
+                node_id
+            );
+            return false;
+        } else {
+            if (node.type === "end") {
+                context.output[node_id] = {
+                    type: "exit",
+                    final: false
+                };
+                return false;
+            } else {
+                context.output[node_id] = node;
+                return true;
+            }
+        }
+    }
+}
+
+function create_function(name, args, self_name) {
+    return {
+        type: "function",
+        name: name,
+        args: args,
+        self_name: self_name,
+        body: []
+    };
+}
+
+function create_function_node(doc) {
+    return {
+        type: "function",
+        name: doc.name,
+        args: doc.args,
+        body: []
+    };
+}
+
+function declare_variables(scope, body) {
+    var locals;
+    var name;
+    var type;
+    var content;
+
+    locals = [];
+
+    for (name in scope.declarations) {
+        type = scope.declarations[name];
+
+        if (type === "local") {
+            locals.push(name);
+        }
+    }
+
+    if (locals.length !== 0) {
+        locals.sort();
+        content = "local " + locals.join(", ");
+        add_action(content, body);
+    }
+}
+
+function drakon_to_tree(doc, noLoop) {
+    var tmp;
+    var json;
+    var options;
+    var raw_tree_json;
+
+    tmp = {
+        items: doc.items
+    };
+
+    json = JSON.stringify(tmp);
+
+    options = {
+        noLoop: noLoop
+    };
+
+    raw_tree_json = global_options.toTree(
+        json,
+        doc.name,
+        doc.path,
+        "en",
+        options
+    );
+
+    return JSON.parse(raw_tree_json);
+}
+
+function find_first_node(doc) {
+    var branches;
+    var item_id;
+    var branch;
+    var first;
+
+    branches = [];
+
+    for (item_id of doc.branches) {
+        branch = doc.items[item_id];
+        branches.push(branch);
+    }
+
+    branches.sort(function (left, right) {
+        return left.branchId - right.branchId;
+    });
+
+    first = branches[0];
+    return first.one;
+}
+
+function has_final(body) {
+    var last;
+
+    if (body.length === 0) {
+        return false;
+    } else {
+        last = body[body.length - 1];
+        return last.final;
+    }
+}
+
+function is_final(doc, node) {
+    var item;
+    var last;
+
+    if (node.id) {
+        item = doc.items[node.id];
+
+        if (item.statements && item.statements.length !== 0) {
+            last = item.statements[item.statements.length - 1];
+
+            if (last.type === "ReturnStatement") {
+                return true;
+            } else {
+                if (
+                    last.type === "CallStatement" &&
+                    last.expression.type === "CallExpression" &&
+                    last.expression.base.type === "Identifier" &&
+                    last.expression.base.name === "error"
+                ) {
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
+}
+
+function is_machine(doc) {
+    if (doc.states.length === 0) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+function is_simple_silhouette(raw_tree) {
+    var first_branch = raw_tree.branches[0];
+
+    if (first_branch.refs > 0) {
+        return false;
+    }
+
+    for (var i = 0; i < raw_tree.branches.length; i++) {
+        var branch = raw_tree.branches[i];
+        var is_last = i === raw_tree.branches.length - 1;
+
+        if (branch.refs > 1) {
+            if (!is_last) {
+                return false;
+            } else {
+                if (branch.body.length > 1) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+function qc(content) {
+    var operand;
+    var left;
+    var right;
+
+    if (typeof content === "string") {
+        return content;
+    } else {
+        if (content.operator === "not") {
+            operand = qc(content.operand);
+            return "not (" + operand + ")";
+        } else {
+            if (content.operator === "and") {
+                left = qc(content.left);
+                right = qc(content.right);
+                return "(" + left + ") and (" + right + ")";
+            } else {
+                if (content.operator === "or") {
+                    left = qc(content.left);
+                    right = qc(content.right);
+                    return "(" + left + ") or (" + right + ")";
+                } else {
+                    if (content.operator !== "equal") {
+                        throw new Error("Unexpected case value: " + content.operator);
+                    }
+
+                    left = qc(content.left);
+                    right = qc(content.right);
+                    return left + " == " + right;
+                }
+            }
+        }
+    }
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+function find_branch(branches, name) {
+    var branch;
+
+    for (branch of branches) {
+        if (branch.name === name) {
+            return branch;
+        }
+    }
+
+    return undefined;
+}
+
+function traverse_graph(context, first_node_id, visitor) {
+    var visited;
+
+    visited = {};
+    traverse_graph_node(context, first_node_id, visitor, visited);
+}
+
+function traverse_graph_node(context, node_id, visitor, visited) {
+    var node;
+    var should_continue;
+
+    if (node_id === undefined || node_id === null) {
+        return;
+    }
+
+    if (node_id in visited) {
+        return;
+    }
+
+    visited[node_id] = true;
+
+    node = context.input[node_id];
+    if (!node) {
+        return;
+    }
+
+    should_continue = visitor(context, node_id, node);
+
+    if (should_continue === false) {
+        return;
+    }
+
+    traverse_graph_node(context, node.one, visitor, visited);
+    traverse_graph_node(context, node.two, visitor, visited);
+}
+
+module.exports = {
+    build_module_tree: build_module_tree
+};
+},{}],17:[function(require,module,exports){
+const {read_project} = require("./os2605/reader")
+const {parse_items} = require("./os2605/parser")
+const {build_module_tree} = require("./os2605/tree")
+const {build_module_code} = require("./os2605/printer")
+
+function pause(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+
+async function generate_os(options) {
+    var project;
+    var parse_result;
+    var tree;
+    var module_src;
+
+    project = await read_project(options);
+    if (project.errors && project.errors.length) {
+        return {
+            errors: project.errors
+        };
+    }
+
+    await pause(1);
+
+    parse_result = parse_items(
+        project.module,
+        options
+    );
+    if (parse_result.errors && parse_result.errors.length) {
+        return {
+            errors: parse_result.errors
+        };
+    }
+
+
+
+    await pause(1);
+
+    tree = build_module_tree(
+        project.module,
+        options
+    );
+    if (tree.errors && tree.errors.length) {
+        return {
+            errors: tree.errors
+        };
+    }
+
+    await pause(1);
+    module_src = build_module_code(
+        tree.module,
+        options
+    );
+    if (module_src.errors && module_src.errors.length) {
+        return {
+            errors: module_src.errors
+        };
+    }
+
+    return {
+        code: module_src.code
+    };
+}
+
+async function wrapOsGenerator(options) {
+    var result
+    try {
+        result = await generate_os(options)
+    } catch (ex) {
+        options.onError({
+            message: ex.message,
+            filename: ex.filename,
+            nodeId: ex.nodeId,
+            data: ex.data
+        })
+        return
+    }
+    if (result.errors && result.errors.length != 0) {
+        for (var error of result.errors) {
+            options.onError(error)
+        }
+    } else {
+        await options.onData(result.code)
+    }
+}
+
+
+function Os2605Generator(options) {
+    var self = { _type: 'Os2605Generator' };
+    self.run = () => wrapOsGenerator(options)
+    self.stop = function() {}
+    return self
+}
+
+module.exports = { Os2605Generator };
+},{"./os2605/parser":18,"./os2605/printer":19,"./os2605/reader":20,"./os2605/tree":21}],18:[function(require,module,exports){
+"use strict";
+
+let error_list = [];
+let global_options = undefined;
+
+function parse_items(module, options) {
+    error_list = [];
+    global_options = options;
+
+    for (const fun_name in module.functions) {
+        const fun = module.functions[fun_name];
+        parse_items_in_document(fun);
+    }
+
+    return {
+        errors: error_list
+    };
+}
+
+function parse_items_in_document(doc) {
+    parse_arguments(doc);
+
+    doc.returnsValue = false;
+
+    if (doc.items === undefined) {
+        return;
+    }
+
+    for (const item_id in doc.items) {
+        const item = doc.items[item_id];
+
+        if (is_return(item)) {
+            doc.returnsValue = true;
+        } else if (item.type === "end") {
+            item.type = "exit";
+        }
+    }
+}
+
+function is_return(item) {
+    if (item.type === "action" && item.content !== undefined) {
+        const content = item.content.trim();
+        const parts = content.split(" ");
+
+        if (parts.length > 1 && parts[0].toLowerCase() === "возврат") {
+            return true;
+        }
+
+        return false;
+    }
+
+    return false;
+}
+
+function parse_arguments(doc) {
+    const lines = split_params(doc);
+    const decorations = [];
+    const args = [];
+
+    trim_and_filter(doc, lines, decorations, args);
+}
+
+function split_params(doc) {
+    if (doc.params !== undefined && doc.params !== "") {
+        return split_lines(doc.params);
+    }
+
+    return [];
+}
+
+function trim_and_filter(doc, lines, decorations, args) {
+    const seen = {};
+
+    for (const line of lines) {
+        const arg = line.trim();
+
+        if (arg !== "") {
+            if (arg.startsWith("&")) {
+                decorations.push(arg);
+            } else {
+                if (arg in seen) {
+                    report_error(
+                        "Аргумент неуникальный",
+                        doc.path,
+                        "params",
+                        arg
+                    );
+                }
+
+                seen[arg] = true;
+                args.push(arg);
+            }
+        }
+    }
+
+    doc.args = args;
+    doc.decorations = decorations;
+}
+
+function split_lines(text) {
+    return text.split(/\r\n|\n|\r/);
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+module.exports = {
+    parse_items: parse_items
+};
+},{}],19:[function(require,module,exports){
+"use strict";
+
+let error_list = [];
+
+function build_module_code(root, options) {
+    error_list = [];
+
+    const lines = [];
+
+    for (const node of root.body) {
+        print_node(node, 0, lines);
+    }
+
+    if (error_list.length !== 0) {
+        return {
+            errors: error_list
+        };
+    }
+
+    return {
+        code: lines.join("\n")
+    };
+}
+
+function print_node(node, depth, lines) {
+    const context = {
+        node: node,
+        depth: depth,
+        lines: lines
+    };
+
+    if (node.type === "function") {
+        print_function(context);
+    } else if (node.type === "action") {
+        print_action(context);
+    } else if (node.type === "question") {
+        print_question(context);
+    } else if (node.type === "loop") {
+        print_loop(context);
+    } else if (node.type === "if-switch") {
+        print_switch(context);
+    } else if (node.type === "empty-line") {
+        add_line(context, "");
+    } else if (node.type === "exit") {
+        print_exit(context);
+    } else {
+        report_error(
+            "Unexpected node type: " + node.type,
+            undefined,
+            undefined,
+            node.type
+        );
+    }
+}
+
+function print_function(context) {
+    const node = context.node;
+
+    add_line(context, "");
+
+    if (node.decorations !== undefined) {
+        for (const dec of node.decorations) {
+            add_line(context, dec);
+        }
+    }
+
+    const args = safe_array(node.args).join(", ");
+    let line = undefined;
+
+    if (node.returnsValue) {
+        line = "Функция " + node.name + "(" + args + ")";
+    } else {
+        line = "Процедура " + node.name + "(" + args + ")";
+    }
+
+    if (
+        node.keywords !== undefined &&
+        node.keywords.export === true
+    ) {
+        line = line + " Экспорт";
+    }
+
+    add_line(context, line);
+    print_body(context, node.body);
+
+    if (node.returnsValue) {
+        add_line(context, "КонецФункции");
+    } else {
+        add_line(context, "КонецПроцедуры");
+    }
+}
+
+function print_action(context) {
+    const node = context.node;
+
+    if (node.content !== undefined && node.content !== "") {
+        const parts = node.content.split("\n");
+
+        for (const part of parts) {
+            add_line(context, part);
+        }
+    }
+}
+
+function print_question(context) {
+    const node = context.node;
+    const parts = node.content.split("\n");
+    const content = parts.join(" ");
+
+    add_line(context, "Если " + content + " Тогда");
+
+    print_body(context, node.yes);
+
+    if (node.no !== undefined && node.no.length !== 0) {
+        add_line(context, "Иначе");
+        print_body(context, node.no);
+    }
+
+    add_line(context, "КонецЕсли;");
+}
+
+function print_loop(context) {
+    const node = context.node;
+
+    add_line(context, node.content);
+    print_body(context, node.body);
+    add_line(context, "КонецЦикла;");
+}
+
+function print_switch(context) {
+    const node = context.node;
+    let first = true;
+
+    for (const option of node.options) {
+        if (first) {
+            add_line(context, "Если " + option.condition + " Тогда");
+            first = false;
+        } else {
+            add_line(context, "ИначеЕсли " + option.condition + " Тогда");
+        }
+
+        print_body(context, option.body);
+    }
+
+    if (node.other !== undefined && node.other.length !== 0) {
+        add_line(context, "Иначе");
+        print_body(context, node.other);
+    }
+
+    add_line(context, "КонецЕсли;");
+}
+
+function print_exit(context) {
+    add_line(context, "Возврат;");
+}
+
+function print_body(context, body) {
+    const depth = context.depth;
+    const lines = context.lines;
+
+    if (body === undefined) {
+        return;
+    }
+
+    for (const child of body) {
+        print_node(child, depth + 1, lines);
+    }
+}
+
+function add_line(context, text) {
+    const depth = context.depth;
+    const lines = context.lines;
+    const indent = repeat_string(" ", depth * 4);
+    const line = indent + text;
+
+    lines.push(line);
+}
+
+function repeat_string(text, count) {
+    let result = "";
+
+    for (let index = 0; index < count; index++) {
+        result += text;
+    }
+
+    return result;
+}
+
+function safe_array(value) {
+    if (value === undefined) {
+        return [];
+    }
+
+    return value;
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+module.exports = {
+    build_module_code: build_module_code
+};
+},{}],20:[function(require,module,exports){
+"use strict";
+
+var error_list = [];
+var global_options = undefined;
+
+async function add_function(module, function_doc) {
+    if (function_doc.name in module.functions) {
+        report_error(
+            "Имя функции неуникально",
+            function_doc.path,
+            undefined,
+            undefined
+        );
+    } else {
+        module.functions[function_doc.name] = function_doc;
+    }
+}
+
+async function read_children(node) {
+    var result;
+    var i;
+    var child_path;
+    var child;
+
+    if (node.children) {
+        result = [];
+
+        for (i = 0; i < node.children.length; i++) {
+            child_path = node.children[i];
+            child = await read_object(child_path);
+
+            if (child && (child.type === "drakon" || child.type === "folder")) {
+                result.push(child);
+            }
+        }
+
+        return result;
+    } else {
+        return [];
+    }
+}
+
+async function read_object(handle) {
+    var node;
+
+    node = await global_options.getObjectByHandle(handle);
+
+    if (node && node.type === "drakon") {
+        if (!node.keywords) {
+            node.keywords = {};
+        }
+
+        if (!node.items) {
+            node.items = {};
+        }
+    }
+
+    return node;
+}
+
+async function read_project(options) {
+    var root_folder;
+    var module;
+
+    error_list = [];
+    global_options = options;
+
+    root_folder = await read_object(global_options.root);
+
+    module = {
+        header: undefined,
+        body: undefined,
+        functions: {}
+    };
+
+    await read_project_folder(module, root_folder);
+
+    if (error_list.length === 0) {
+        return {
+            module: module
+        };
+    } else {
+        return {
+            errors: error_list
+        };
+    }
+}
+
+async function read_project_folder(module, folder) {
+    var children;
+    var i;
+    var child;
+
+    children = await read_children(folder);
+
+    for (i = 0; i < children.length; i++) {
+        child = children[i];
+
+        if (child.name === "Заголовок") {
+            set_header(module, child);
+        } else if (child.name === "Тело") {
+            set_body(module, child);
+        } else if (child.type === "folder") {
+            await read_project_folder(module, child);
+        } else {
+            await add_function(module, child);
+        }
+    }
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+function set_body(module, folder) {
+    if (module.body) {
+        report_error(
+            "Тело уже есть",
+            folder.path,
+            undefined,
+            undefined
+        );
+    } else {
+        module.body = folder;
+    }
+}
+
+function set_header(module, folder) {
+    if (module.header) {
+        report_error(
+            "Заголовок уже есть",
+            folder.path,
+            undefined,
+            undefined
+        );
+    } else {
+        module.header = folder;
+    }
+}
+
+module.exports = {
+    read_project: read_project
+};
+},{}],21:[function(require,module,exports){
+"use strict";
+
+let error_list = [];
+let global_options = undefined;
+
+function build_module_tree(module, options) {
+    error_list = [];
+    global_options = options;
+
+    const tree = {
+        type: "module",
+        body: []
+    };
+
+    generate_method_body(module.header, tree.body);
+
+    const names = Object.keys(module.functions);
+    names.sort();
+
+    for (const name of names) {
+        const fun = module.functions[name];
+        build_method_tree(fun, tree.body);
+    }
+
+    tree.body.push({
+        type: "empty-line"
+    });
+
+    generate_method_body(module.body, tree.body);
+
+    if (error_list.length === 0) {
+        return {
+            module: tree
+        };
+    }
+
+    return {
+        errors: error_list
+    };
+}
+
+function build_method_tree(method, output) {
+    const tree = {
+        type: "function",
+        keywords: method.keywords,
+        name: method.name,
+        args: method.args,
+        decorations: method.decorations,
+        returnsValue: method.returnsValue,
+        body: []
+    };
+
+    output.push(tree);
+    generate_method_body(method, tree.body);
+}
+
+function generate_method_body(doc, output) {
+    if (doc === undefined) {
+        return;
+    }
+
+    const raw_tree = drakon_to_tree(doc);
+
+    if (raw_tree.branches.length === 0) {
+        return;
+    }
+
+    const first = raw_tree.branches[0];
+    const declarations = doc.declarations || [];
+
+    if (raw_tree.branches.length === 1) {
+        const context = {
+            declarations: declarations,
+            doc: doc,
+            simple: true
+        };
+
+        convert_tree(context, first.body, output);
+        return;
+    }
+
+    if (is_simple_silhouette(raw_tree)) {
+        const context = {
+            declarations: declarations,
+            doc: doc,
+            simple: true,
+            branches: raw_tree.branches
+        };
+
+        convert_tree(context, first.body, output);
+        return;
+    }
+
+    add_action(
+        "_ветка_ = \"" + first.name + "\";",
+        output,
+        false
+    );
+
+    const context = {
+        declarations: declarations,
+        doc: doc,
+        simple: false,
+        branches: raw_tree.branches,
+        state_var: "_ветка_"
+    };
+
+    complex_silhouette_to_tree(context, output);
+}
+
+function complex_silhouette_to_tree(context, body) {
+    const first_branch = context.branches[0];
+    let branches = context.branches;
+
+    if (first_branch.refs === 0) {
+        convert_tree(
+            context,
+            first_branch.body,
+            body
+        );
+
+        branches = context.branches.slice(1);
+    }
+
+    const state_var = context.state_var;
+
+    const loop = {
+        type: "loop",
+        content: "Пока Истина Цикл",
+        body: []
+    };
+
+    body.push(loop);
+
+    const switch_item = {
+        type: "if-switch",
+        options: [],
+        other: []
+    };
+
+    loop.body.push(switch_item);
+
+    for (const branch of branches) {
+        const condition = state_var + " = \"" + branch.name + "\"";
+
+        const option = {
+            type: "option",
+            condition: condition,
+            body: []
+        };
+
+        switch_item.options.push(option);
+        convert_tree(context, branch.body, option.body);
+    }
+
+    add_action(
+        "ВызватьИсключение \"Неверное значение метки силуэта: \" + " + state_var + ";",
+        switch_item.other,
+        true
+    );
+}
+
+function convert_tree(context, nodes, body) {
+    for (const node of nodes) {
+        if (node.type === "action") {
+            add_action_node(context, node, body);
+        } else if (node.type === "exit") {
+            add_exit_node(context, body);
+        } else if (node.type === "question") {
+            add_question_node(context, node, body);
+        } else if (node.type === "loop") {
+            add_loop_node(context, node, body);
+        } else if (node.type === "address") {
+            add_address_node(context, node, body);
+        } else if (node.type === "break") {
+            add_break_node(body);
+        } else if (node.type === "error") {
+            add_error_node(node, body);
+        } else {
+            report_error(
+                "Unexpected node type: " + node.type,
+                context.doc.path,
+                node.id,
+                undefined
+            );
+        }
+    }
+}
+
+function add_action_node(context, node, body) {
+    const item = {
+        content: node.content,
+        type: node.type,
+        final: is_final(context.doc, node)
+    };
+
+    body.push(item);
+}
+
+function add_exit_node(context, body) {
+    if (context.simple) {
+        return;
+    }
+
+    if (has_final(body)) {
+        return;
+    }
+
+    body.push({
+        type: "exit",
+        final: true
+    });
+}
+
+function add_question_node(context, node, body) {
+    const item = {
+        content: qc(node.content),
+        type: node.type,
+        yes: [],
+        no: []
+    };
+
+    convert_tree(context, node.yes, item.yes);
+    convert_tree(context, node.no, item.no);
+
+    body.push(item);
+}
+
+function add_loop_node(context, node, body) {
+    const content = node.content || "Пока Истина Цикл";
+
+    const item = {
+        type: "loop",
+        content: content,
+        body: []
+    };
+
+    convert_tree(context, node.body, item.body);
+    body.push(item);
+}
+
+function add_address_node(context, node, body) {
+    if (has_final(body)) {
+        return;
+    }
+
+    if (context.simple) {
+        const next_branch = find_branch(context.branches, node.content);
+
+        if (next_branch === undefined) {
+            report_error(
+                "Branch not found: " + node.content,
+                context.doc.path,
+                node.id,
+                undefined
+            );
+            return;
+        }
+
+        convert_tree(context, next_branch.body, body);
+    } else {
+        add_action(
+            context.state_var + " = \"" + node.content + "\";",
+            body,
+            false
+        );
+    }
+}
+
+function add_break_node(body) {
+    if (has_final(body)) {
+        return;
+    }
+
+    add_action("Прервать;", body, true);
+}
+
+function add_error_node(node, body) {
+    add_action(
+        "ВызватьИсключение \"" + node.message + ": \" + " + node.content + ";",
+        body,
+        true
+    );
+}
+
+function find_branch(branches, name) {
+    for (const branch of branches) {
+        if (branch.name === name) {
+            return branch;
+        }
+    }
+
+    return undefined;
+}
+
+function add_action(content, body, final) {
+    const item = {
+        type: "action",
+        content: content,
+        final: final || false
+    };
+
+    body.push(item);
+}
+
+function drakon_to_tree(doc) {
+    const tmp = {
+        items: doc.items
+    };
+
+    const json = JSON.stringify(tmp);
+    const options = {};
+
+    const raw_tree_json = global_options.toTree(
+        json,
+        doc.name,
+        doc.path,
+        "ru",
+        options
+    );
+
+    return JSON.parse(raw_tree_json);
+}
+
+function has_final(body) {
+    if (body.length === 0) {
+        return false;
+    }
+
+    const last = body[body.length - 1];
+
+    if (last.final) {
+        return true;
+    }
+
+    if (last.type === "question" && has_final(last.yes) && has_final(last.no)) {
+        return true;
+    }
+
+    return false;
+}
+
+function is_final(doc, node) {
+    if (node.id === undefined) {
+        return false;
+    }
+
+    const item = doc.items[node.id];
+
+    if (item === undefined) {
+        return false;
+    }
+
+    if (item.content === undefined) {
+        return false;
+    }
+
+    return (
+        item.content.startsWith("Возврат ") ||
+        item.content.startsWith("ВызватьИсключение ")
+    );
+}
+
+function is_simple_silhouette(raw_tree) {
+    const first_branch = raw_tree.branches[0];
+
+    if (first_branch.refs > 0) {
+        return false;
+    }
+
+    const last_index = raw_tree.branches.length - 1;
+
+    for (let index = 0; index < raw_tree.branches.length; index++) {
+        const branch = raw_tree.branches[index];
+        const is_last = index === last_index;
+
+        if (branch.refs > 1) {
+            return false;
+        }
+
+        if (is_last && branch.body.length > 2) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function qc(content) {
+    if (typeof content === "string") {
+        return content;
+    }
+
+    if (content.operator === "not") {
+        return "Не (" + qc(content.operand) + ")";
+    }
+
+    if (content.operator === "and") {
+        return "(" + qc(content.left) + ") И (" + qc(content.right) + ")";
+    }
+
+    if (content.operator === "or") {
+        return "(" + qc(content.left) + ") Или (" + qc(content.right) + ")";
+    }
+
+    if (content.operator === "equal") {
+        return qc(content.left) + " = " + qc(content.right);
+    }
+
+    report_error(
+        "Unexpected operator: " + content.operator,
+        undefined,
+        undefined,
+        content.operator
+    );
+
+    return "";
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+module.exports = {
+    build_module_tree: build_module_tree
+};
+},{}],22:[function(require,module,exports){
+const {read_project} = require("./pfl2605/reader")
+const {parse_items} = require("./pfl2605/parser")
+const {build_module_tree} = require("./pfl2605/tree")
+const {build_module_code} = require("./pfl2605/printer")
+
+function pause(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+
+async function generate_pfl(options) {
+    var project;
+    var parse_result;
+    var tree;
+    var module_src;
+
+    project = await read_project(options);
+    if (project.errors && project.errors.length) {
+        return {
+            errors: project.errors
+        };
+    }
+
+    await pause(1);
+
+    parse_result = parse_items(
+        project.module,
+        options
+    );
+    if (parse_result.errors && parse_result.errors.length) {
+        return {
+            errors: parse_result.errors
+        };
+    }
+
+
+
+    await pause(1);
+
+    tree = build_module_tree(
+        project.module,
+        options
+    );
+    if (tree.errors && tree.errors.length) {
+        return {
+            errors: tree.errors
+        };
+    }
+
+    await pause(1);
+    module_src = build_module_code(
+        tree.module,
+        options
+    );
+    if (module_src.errors && module_src.errors.length) {
+        return {
+            errors: module_src.errors
+        };
+    }
+
+    return {
+        code: module_src.code
+    };
+}
+
+async function wrapPflGenerator(options) {
+    var result
+    try {
+        result = await generate_pfl(options)
+    } catch (ex) {
+        options.onError({
+            message: ex.message,
+            filename: ex.filename,
+            nodeId: ex.nodeId,
+            data: ex.data
+        })
+        return
+    }
+    if (result.errors && result.errors.length != 0) {
+        for (var error of result.errors) {
+            options.onError(error)
+        }
+    } else {
+        await options.onData(result.code)
+    }
+}
+
+
+function Pfl2605Generator(options) {
+    var self = { _type: 'Pfl2605Generator' };
+    self.run = () => wrapPflGenerator(options)
+    self.stop = function() {}
+    return self
+}
+
+module.exports = { Pfl2605Generator };
+},{"./pfl2605/parser":23,"./pfl2605/printer":24,"./pfl2605/reader":25,"./pfl2605/tree":26}],23:[function(require,module,exports){
+"use strict";
+
+let error_list = [];
+let global_options = undefined;
+let next_id = 1;
+
+async function parse_items(module, options) {
+    error_list = [];
+    global_options = options;
+
+    for (const class_name in module.classes) {
+        const clazz = module.classes[class_name];
+
+        if (clazz.constructor !== undefined) {
+            parse_items_in_document(clazz.constructor);
+        }
+
+        for (const method_name in clazz.methods) {
+            const method = clazz.methods[method_name];
+            parse_items_in_document(method);
+        }
+    }
+
+    return {
+        errors: error_list
+    };
+}
+
+function parse_items_in_document(doc) {
+    parse_arguments(doc);
+
+    if (doc.items === undefined) {
+        return;
+    }
+
+    for (const item_id in doc.items) {
+        const item = doc.items[item_id];
+
+        if (item.type === "end") {
+            item.type = "exit";
+        }
+    }
+}
+
+function parse_arguments(doc) {
+    split_params(doc);
+}
+
+function split_params(doc) {
+    if (doc.params !== undefined && doc.params !== "") {
+        const lines = split_lines(doc.params);
+        const args = [];
+        trim_and_filter(doc, lines, args);
+    } else {
+        doc.args = [];
+    }
+}
+
+function trim_and_filter(doc, lines, args) {
+    const seen = {};
+
+    for (const line of lines) {
+        const arg = line.trim();
+
+        if (arg !== "") {
+            if (arg in seen) {
+                report_error(
+                    "Аргумент неуникальный",
+                    doc.path,
+                    "params",
+                    arg
+                );
+            }
+
+            seen[arg] = true;
+            args.push(arg);
+        }
+    }
+
+    parse_return_type(doc, args);
+}
+
+function parse_return_type(doc, args) {
+    if (args.length !== 0) {
+        const last = args[args.length - 1];
+
+        if (last.startsWith("тип ")) {
+            args.pop();
+            doc.returns = last;
+        }
+    }
+
+    doc.args = args;
+}
+
+function split_lines(text) {
+    return text.split(/\r\n|\n|\r/);
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+module.exports = {
+    parse_items: parse_items
+};
+},{}],24:[function(require,module,exports){
+"use strict";
+
+var error_list = [];
+var global_options = undefined;
+var next_id = 1;
+
+function create_error(message, details) {
+    return {
+        id: next_id++,
+        message: message,
+        details: details
+    };
+}
+
+function report_error(message, details) {
+    error_list.push(create_error(message, details));
+}
+
+function repeat_space(count) {
+    var result = "";
+    var i = 0;
+    while (i < count) {
+        result += " ";
+        i++;
+    }
+    return result;
+}
+
+function is_empty(array) {
+    return !array || array.length === 0;
+}
+
+function add_line(context, text) {
+    var indent = repeat_space(context.depth * 4);
+    var line = indent + text;
+    context.lines.push(line);
+}
+
+function build_module_code(root, options) {
+    global_options = options;
+    error_list = [];
+
+    var lines = [];
+    var i = 0;
+    var node = undefined;
+
+    if (!root || !root.body) {
+        report_error("Root body is missing", undefined);
+        return {
+            code: "",
+            errors: error_list
+        };
+    }
+
+    while (i < root.body.length) {
+        node = root.body[i];
+        print_node(node, 0, lines);
+        i++;
+    }
+
+    return {
+        code: lines.join("\n"),
+        errors: error_list
+    };
+}
+
+function print_action(context) {
+    var node = context.node;
+    var parts = undefined;
+    var i = 0;
+
+    if (node.content) {
+        parts = node.content.split("\n");
+        while (i < parts.length) {
+            add_line(context, parts[i]);
+            i++;
+        }
+    }
+}
+
+function print_body(context, body) {
+    var child_context = undefined;
+    var i = 0;
+
+    if (!body) {
+        return;
+    }
+
+    while (i < body.length) {
+        child_context = {
+            node: body[i],
+            depth: context.depth + 1,
+            lines: context.lines
+        };
+        print_node(child_context.node, child_context.depth, child_context.lines);
+        i++;
+    }
+}
+
+function print_class(context) {
+    var node = context.node;
+
+    add_line(context, "");
+    add_line(context, "&ВидноВсем");
+    add_line(context, "Класс " + node.name);
+    print_body(context, node.body);
+    add_line(context, "КонецКласса");
+}
+
+function print_exit(context) {
+    add_line(context, "Возврат");
+}
+
+function print_function(context) {
+    var node = context.node;
+    var args = "";
+
+    add_line(context, "");
+
+    if (
+        node.keywords &&
+        node.keywords.export === true
+    ) {
+        add_line(context, "&ВидноВсем");
+    }
+
+    if (
+        node.keywords &&
+        node.keywords.async === true
+    ) {
+        add_line(context, "&Асинх");
+    }
+
+    args = node.args.join(", ");
+
+    if (node.name === "Конструктор") {
+        add_line(context, node.name + "(" + args + ")");
+    } else {
+        if (node.returns) {
+            add_line(
+                context,
+                "Функция " +
+                    node.name +
+                    "(" +
+                    args +
+                    ") " +
+                    node.returns
+            );
+        } else {
+            add_line(
+                context,
+                "Процедура " +
+                    node.name +
+                    "(" +
+                    args +
+                    ")"
+            );
+        }
+    }
+
+    print_body(context, node.body);
+
+    if (node.name === "Конструктор") {
+        add_line(context, "КонецКонструктора");
+    } else {
+        if (node.returns) {
+            add_line(context, "КонецФункции");
+        } else {
+            add_line(context, "КонецПроцедуры");
+        }
+    }
+}
+
+function print_loop(context) {
+    var node = context.node;
+
+    add_line(context, node.content);
+    print_body(context, node.body);
+    add_line(context, "КонецЦикла");
+}
+
+function print_node(node, depth, lines) {
+    var context = {
+        node: node,
+        depth: depth,
+        lines: lines
+    };
+
+    if (!node) {
+        report_error("Node is missing", undefined);
+        return;
+    }
+
+    if (node.type === "function") {
+        print_function(context);
+    } else if (node.type === "action") {
+        print_action(context);
+    } else if (node.type === "question") {
+        print_question(context);
+    } else if (node.type === "loop") {
+        print_loop(context);
+    } else if (node.type === "if-switch") {
+        print_switch(context);
+    } else if (node.type === "empty-line") {
+        add_line(context, "");
+    } else if (node.type === "exit") {
+        print_exit(context);
+    } else if (node.type === "class") {
+        print_class(context);
+    } else if (node.type === "program") {
+        print_program(context);
+    } else {
+        report_error("Unexpected case value", node.type);
+    }
+}
+
+function print_program(context) {
+    var node = context.node;
+
+    add_line(context, "");
+    add_line(context, "Программа " + node.name);
+    print_body(context, node.body);
+    add_line(context, "КонецПрограммы");
+}
+
+function print_question(context) {
+    var node = context.node;
+    var parts = [];
+    var content = "";
+
+    if (node.content) {
+        parts = node.content.split("\n");
+        content = parts.join(" ");
+    }
+
+    add_line(context, "Если " + content + " Тогда");
+    print_body(context, node.yes);
+
+    if (!is_empty(node.no)) {
+        add_line(context, "Иначе");
+        print_body(context, node.no);
+    }
+
+    add_line(context, "КонецЕсли");
+}
+
+function print_switch(context) {
+    var node = context.node;
+    var i = 0;
+    var option = undefined;
+
+    if (node.options) {
+        while (i < node.options.length) {
+            option = node.options[i];
+
+            if (i === 0) {
+                add_line(context, "Если " + option.condition + " Тогда");
+            } else {
+                add_line(context, "ИначеЕсли " + option.condition + " Тогда");
+            }
+
+            print_body(context, option.body);
+            i++;
+        }
+    }
+
+    if (!is_empty(node.other)) {
+        add_line(context, "Иначе");
+        print_body(context, node.other);
+    }
+
+    add_line(context, "КонецЕсли");
+}
+
+module.exports = {
+    build_module_code: build_module_code
+};
+},{}],25:[function(require,module,exports){
+"use strict";
+
+var error_list = [];
+var global_options = undefined;
+var next_id = 1;
+
+async function read_project(options) {
+    error_list = [];
+    global_options = options;
+
+    var root_folder = await read_object(global_options.root);
+    var module = create_module();
+
+    await read_project_folder(module, root_folder);
+
+    if (error_list.length === 0) {
+        return {
+            module: module
+        };
+    } else {
+        return {
+            errors: error_list
+        };
+    }
+}
+
+function create_module() {
+    return {
+        header: undefined,
+        classes: {}
+    };
+}
+
+function create_class_object(name, type) {
+    return {
+        name: name,
+        type: type,
+        class_body: undefined,
+        methods: {},
+        constructor: undefined
+    };
+}
+
+async function add_function(klass, func) {
+    if (func.name in klass.methods) {
+        report_error(
+            "Имя функции неуникально",
+            func.path
+        );
+    } else {
+        klass.methods[func.name] = func;
+    }
+}
+
+async function create_class(module, folder) {
+    var name = try_extract_name(
+        folder.name,
+        "класс"
+    );
+
+    if (name in module.classes) {
+        report_error(
+            "Имя класса неуникально",
+            folder.path
+        );
+    } else {
+        var klass = create_class_object(
+            name,
+            "class"
+        );
+
+        module.classes[name] = klass;
+
+        await read_class_folder(
+            klass,
+            folder
+        );
+    }
+}
+
+async function create_program(module, folder) {
+    var name = try_extract_name(
+        folder.name,
+        "программа"
+    );
+
+    if (name in module.classes) {
+        report_error(
+            "Имя программы неуникально",
+            folder.path
+        );
+    } else {
+        var program = create_class_object(
+            name,
+            "program"
+        );
+
+        module.classes[name] = program;
+
+        await read_program_folder(
+            program,
+            folder
+        );
+    }
+}
+
+function is_class(text) {
+    var name = try_extract_name(
+        text,
+        "класс"
+    );
+
+    if (name) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+function is_program(text) {
+    var name = try_extract_name(
+        text,
+        "программа"
+    );
+
+    if (name) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+async function read_children(node) {
+    if (node.children) {
+        var result = [];
+        var i = 0;
+
+        while (i < node.children.length) {
+            var child_path = node.children[i];
+            var child = await read_object(child_path);
+
+            if (child && (child.type === "drakon" || child.type === "folder")) {
+                result.push(child);
+            }
+
+            i++;
+        }
+
+        return result;
+    } else {
+        return [];
+    }
+}
+
+async function read_class_folder(klass, folder) {
+    var children = await read_children(folder);
+    var i = 0;
+
+    while (i < children.length) {
+        var child = children[i];
+
+        if (child.name === "Заголовок") {
+            report_error(
+                "Заголовок не может быть внутри класса",
+                child.path
+            );
+        } else if (child.name === "ТелоКласса") {
+            set_class_body(
+                klass,
+                child
+            );
+        } else if (child.name === "Конструктор") {
+            set_constructor(
+                klass,
+                child
+            );
+        } else if (child.type === "folder") {
+            if (is_program(child.name)) {
+                report_error(
+                    "Программа не может быть внутри класса",
+                    child.path
+                );
+            } else if (is_class(child.name)) {
+                report_error(
+                    "Класс не может быть внутри класса",
+                    child.path
+                );
+            } else {
+                await read_class_folder(
+                    klass,
+                    child
+                );
+            }
+        } else {
+            await add_function(
+                klass,
+                child
+            );
+        }
+
+        i++;
+    }
+}
+
+async function read_object(handle) {
+    var node = await global_options.getObjectByHandle(
+        handle
+    );
+
+    if (node && node.type === "drakon") {
+        if (!node.keywords) {
+            node.keywords = {};
+        }
+
+        if (!node.items) {
+            node.items = {};
+        }
+    }
+
+    return node;
+}
+
+async function read_program_folder(program, folder) {
+    var children = await read_children(folder);
+    var i = 0;
+
+    while (i < children.length) {
+        var child = children[i];
+
+        if (child.name === "Заголовок") {
+            report_error(
+                "Заголовок не может быть внутри программы",
+                child.path
+            );
+        } else if (child.name === "ТелоКласса") {
+            report_error(
+                "Тело класса может быть только в классе",
+                child.path
+            );
+        } else if (child.name === "Конструктор") {
+            report_error(
+                "Конструкторы могут быть только в классах",
+                child.path
+            );
+        } else if (child.type === "folder") {
+            if (is_program(child.name)) {
+                report_error(
+                    "Программа не может быть внутри программы",
+                    child.path
+                );
+            } else if (is_class(child.name)) {
+                report_error(
+                    "Класс не может быть внутри программы",
+                    child.path
+                );
+            } else {
+                await read_program_folder(
+                    program,
+                    child
+                );
+            }
+        } else {
+            await add_function(
+                program,
+                child
+            );
+        }
+
+        i++;
+    }
+}
+
+async function read_project_folder(module, folder) {
+    var children = await read_children(folder);
+    var i = 0;
+
+    while (i < children.length) {
+        var child = children[i];
+
+        if (child.name === "Заголовок") {
+            set_header(
+                module,
+                child
+            );
+        } else if (child.name === "ТелоКласса") {
+            report_error(
+                "Тело класса может быть только в классе",
+                child.path
+            );
+        } else if (child.name === "Конструктор") {
+            report_error(
+                "Конструкторы могут быть только в классах",
+                child.path
+            );
+        } else if (child.type === "folder") {
+            if (is_program(child.name)) {
+                await create_program(
+                    module,
+                    child
+                );
+            } else if (is_class(child.name)) {
+                await create_class(
+                    module,
+                    child
+                );
+            } else {
+                await read_project_folder(
+                    module,
+                    child
+                );
+            }
+        } else {
+            report_error(
+                "Функции могут быть только в классах и программах",
+                child.path
+            );
+        }
+
+        i++;
+    }
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+function set_class_body(klass, folder) {
+    if (klass.class_body) {
+        report_error(
+            "Тело класса уже есть",
+            folder.path
+        );
+    } else {
+        klass.class_body = folder;
+    }
+}
+
+function set_constructor(klass, folder) {
+    if (klass.constructor) {
+        report_error(
+            "Конструктор уже есть",
+            folder.path
+        );
+    } else {
+        klass.constructor = folder;
+    }
+}
+
+function set_header(module, folder) {
+    if (module.header) {
+        report_error(
+            "Заголовок уже есть",
+            folder.path
+        );
+    } else {
+        module.header = folder;
+    }
+}
+
+function try_extract_name(text, prefix) {
+    var low = text.toLowerCase();
+    var before = prefix + " ";
+
+    if (low.startsWith(before)) {
+        return text.substring(before.length);
+    } else {
+        return undefined;
+    }
+}
+
+module.exports = {
+    read_project: read_project
+};
+},{}],26:[function(require,module,exports){
+"use strict";
+
+let error_list = [];
+let global_options = undefined;
+
+function build_module_tree(module, options) {
+    error_list = [];
+    global_options = options;
+
+    const tree = {
+        type: "module",
+        body: []
+    };
+
+    generate_method_body(module.header, tree.body);
+
+    const names = Object.keys(module.classes);
+    names.sort();
+
+    for (const name of names) {
+        const clazz = module.classes[name];
+        build_class_tree(clazz, tree.body);
+    }
+
+    if (error_list.length === 0) {
+        return {
+            module: tree
+        };
+    }
+
+    return {
+        errors: error_list
+    };
+}
+
+function build_class_tree(clazz, output) {
+    const class_tree = {
+        type: clazz.type,
+        name: clazz.name,
+        body: []
+    };
+
+    output.push(class_tree);
+
+    generate_method_body(
+        clazz.class_body,
+        class_tree.body
+    );
+
+    if (clazz.constructor !== undefined) {
+        build_method_tree(
+            clazz.constructor,
+            class_tree.body
+        );
+    }
+
+    const names = Object.keys(clazz.methods);
+    names.sort();
+
+    for (const name of names) {
+        const method = clazz.methods[name];
+        build_method_tree(
+            method,
+            class_tree.body
+        );
+    }
+}
+
+function build_method_tree(method, output) {
+    const tree = {
+        type: "function",
+        keywords: method.keywords,
+        name: method.name,
+        args: method.args,
+        returns: method.returns,
+        body: []
+    };
+
+    output.push(tree);
+    generate_method_body(method, tree.body);
+}
+
+function generate_method_body(doc, output) {
+    if (doc === undefined) {
+        return;
+    }
+
+    const raw_tree = drakon_to_tree(doc, false);
+
+    if (raw_tree.branches.length === 0) {
+        return;
+    }
+
+    const first = raw_tree.branches[0];
+    const declarations = doc.declarations || [];
+
+    if (raw_tree.branches.length === 1) {
+        const context = {
+            declarations: declarations,
+            doc: doc,
+            simple: true
+        };
+
+        convert_tree(context, first.body, output);
+        return;
+    }
+
+    if (is_simple_silhouette(raw_tree)) {
+        const context = {
+            declarations: declarations,
+            doc: doc,
+            simple: true,
+            branches: raw_tree.branches
+        };
+
+        convert_tree(context, first.body, output);
+        return;
+    }
+
+    add_action(
+        "Перем _ветка_ тип Строка = \"" + first.name + "\"",
+        output
+    );
+
+    const context = {
+        declarations: declarations,
+        doc: doc,
+        simple: false,
+        branches: raw_tree.branches,
+        state_var: "_ветка_"
+    };
+
+    complex_silhouette_to_tree(context, output);
+}
+
+function complex_silhouette_to_tree(context, body) {
+    const first_branch = context.branches[0];
+    let branches = context.branches;
+
+    if (first_branch.refs === 0) {
+        convert_tree(
+            context,
+            first_branch.body,
+            body
+        );
+
+        branches = context.branches.slice(1);
+    }
+
+    const state_var = context.state_var;
+
+    const loop = {
+        type: "loop",
+        content: "Цикл",
+        body: []
+    };
+
+    body.push(loop);
+
+    const switch_item = {
+        type: "if-switch",
+        options: [],
+        other: []
+    };
+
+    loop.body.push(switch_item);
+
+    for (const branch of branches) {
+        const condition = state_var + " = \"" + branch.name + "\"";
+
+        const option = {
+            type: "option",
+            condition: condition,
+            body: []
+        };
+
+        switch_item.options.push(option);
+        convert_tree(context, branch.body, option.body);
+    }
+}
+
+function convert_tree(context, nodes, body) {
+    for (const node of nodes) {
+        if (is_declaration(context, node)) {
+            continue;
+        }
+
+        if (node.type === "action") {
+            add_action_node(context, node, body);
+        } else if (node.type === "exit") {
+            add_exit_node(context, body);
+        } else if (node.type === "question") {
+            add_question_node(context, node, body);
+        } else if (node.type === "loop") {
+            add_loop_node(context, node, body);
+        } else if (node.type === "address") {
+            add_address_node(context, node, body);
+        } else if (node.type === "break") {
+            add_break_node(body);
+        } else if (node.type === "error") {
+            add_error_node(node, body);
+        } else {
+            report_error(
+                "Unexpected node type: " + node.type,
+                context.doc.path,
+                node.id,
+                undefined
+            );
+        }
+    }
+}
+
+function is_declaration(context, node) {
+    if (node.id === undefined) {
+        return false;
+    }
+
+    return context.declarations.indexOf(node.id) !== -1;
+}
+
+function add_action_node(context, node, body) {
+    const item = {
+        content: node.content,
+        type: node.type,
+        final: is_final(context.doc, node)
+    };
+
+    body.push(item);
+}
+
+function add_exit_node(context, body) {
+    if (context.simple) {
+        return;
+    }
+
+    if (has_final(body)) {
+        return;
+    }
+
+    body.push({
+        type: "exit",
+        final: true
+    });
+}
+
+function add_question_node(context, node, body) {
+    const item = {
+        content: qc(node.content),
+        type: node.type,
+        yes: [],
+        no: []
+    };
+
+    convert_tree(context, node.yes, item.yes);
+    convert_tree(context, node.no, item.no);
+
+    body.push(item);
+}
+
+function add_loop_node(context, node, body) {
+    const content = node.content || "Цикл";
+
+    const item = {
+        type: "loop",
+        content: content,
+        body: []
+    };
+
+    convert_tree(context, node.body, item.body);
+    body.push(item);
+}
+
+function add_address_node(context, node, body) {
+    if (has_final(body)) {
+        return;
+    }
+
+    if (context.simple) {
+        const next_branch = find_branch(context.branches, node.content);
+
+        if (next_branch === undefined) {
+            report_error(
+                "Branch not found: " + node.content,
+                context.doc.path,
+                node.id,
+                undefined
+            );
+            return;
+        }
+
+        convert_tree(context, next_branch.body, body);
+    } else {
+        add_action(
+            context.state_var + " = \"" + node.content + "\"",
+            body,
+            false
+        );
+    }
+}
+
+function add_break_node(body) {
+    if (has_final(body)) {
+        return;
+    }
+
+    add_action("Прервать", body, true);
+}
+
+function add_error_node(node, body) {
+    add_action(
+        "ВызватьИсключение \"" + node.message + ": \" + " + node.content,
+        body,
+        true
+    );
+}
+
+function find_branch(branches, name) {
+    for (const branch of branches) {
+        if (branch.name === name) {
+            return branch;
+        }
+    }
+
+    return undefined;
+}
+
+function add_action(content, body, final) {
+    const item = {
+        type: "action",
+        content: content,
+        final: final || false
+    };
+
+    body.push(item);
+}
+
+function drakon_to_tree(doc, noLoop) {
+    const tmp = {
+        items: doc.items
+    };
+
+    const json = JSON.stringify(tmp);
+
+    const options = {
+        noLoop: noLoop
+    };
+
+    const raw_tree_json = global_options.toTree(
+        json,
+        doc.name,
+        doc.path,
+        "en",
+        options
+    );
+
+    return JSON.parse(raw_tree_json);
+}
+
+function has_final(body) {
+    if (body.length === 0) {
+        return false;
+    }
+
+    const last = body[body.length - 1];
+
+    if (last.final) {
+        return true;
+    }
+
+    if (last.type === "question" && has_final(last.yes) && has_final(last.no)) {
+        return true;
+    }
+
+    return false;
+}
+
+function is_final(doc, node) {
+    if (node.id === undefined) {
+        return false;
+    }
+
+    const item = doc.items[node.id];
+
+    if (item === undefined) {
+        return false;
+    }
+
+    if (item.content === undefined) {
+        return false;
+    }
+
+    return (
+        item.content.startsWith("Возврат ") ||
+        item.content.startsWith("ВызватьИсключение ")
+    );
+}
+
+function is_simple_silhouette(raw_tree) {
+    const first_branch = raw_tree.branches[0];
+
+    if (first_branch.refs > 0) {
+        return false;
+    }
+
+    const last_index = raw_tree.branches.length - 1;
+
+    for (let index = 0; index < raw_tree.branches.length; index++) {
+        const branch = raw_tree.branches[index];
+        const is_last = index === last_index;
+
+        if (branch.refs > 1) {
+            return false;
+        }
+
+        if (is_last && branch.body.length > 2) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function qc(content) {
+    if (typeof content === "string") {
+        return content;
+    }
+
+    if (content.operator === "not") {
+        return "Не (" + qc(content.operand) + ")";
+    }
+
+    if (content.operator === "and") {
+        return "(" + qc(content.left) + ") И (" + qc(content.right) + ")";
+    }
+
+    if (content.operator === "or") {
+        return "(" + qc(content.left) + ") Или (" + qc(content.right) + ")";
+    }
+
+    if (content.operator === "equal") {
+        return qc(content.left) + " = " + qc(content.right);
+    }
+
+    report_error(
+        "Unexpected operator: " + content.operator,
+        undefined,
+        undefined,
+        content.operator
+    );
+
+    return "";
+}
+
+function report_error(message, handle, item_id, data) {
+    error_list.push({
+        message: message,
+        filename: handle,
+        nodeId: item_id,
+        data: data
+    });
+}
+
+module.exports = {
+    build_module_tree: build_module_tree
+};
+},{}],27:[function(require,module,exports){
+function topologicaSort(start, getAdjacentNodes, reportError) {
+    var context = {
+        permanent: {},
+        temporary: {},
+        output: [],
+        getAdjacentNodes: getAdjacentNodes,
+        reportError: reportError
+    }
+    var crumbs = ""
+    topologicaSortCore(context, start, crumbs)
+    return context.output
+}
+
+function topologicaSortCore(context, key, crumbs) {
+    if (crumbs) {
+        crumbs = crumbs + " > " + key
+    } else {
+        crumbs = key
+    }
+
+    if (key in context.permanent) {
+        return
+    }    
+
+    if (key in context.temporary) {
+        context.reportError(key, crumbs)
+        return
+    }
+
+    context.temporary[key] = true
+    var nodes = context.getAdjacentNodes(key)
+    nodes.forEach(node => topologicaSortCore(context, node, crumbs))
+    context.permanent[key] = true
+    context.output.push(key)
+}
+
+module.exports = {
+    topologicaSort
+}
+},{}],28:[function(require,module,exports){
+function findFirst(array, predicate) {
+    for (var item of array) {
+        if (predicate(item)) {
+            return item
+        }
+    }
+    return undefined
+}
+
+function addRange(target, source) {
+    source.forEach(item => target.push(item))
+}
+
+function sortBy(array, property) {
+    array.sort((left, right) => compareBy(left, right, property))
+}
+
+function compareBy(leftObj, rightObj, property) {
+    var left = leftObj[property]
+    var right = rightObj[property]
+    if (left < right) {
+        return -1
+    }
+    if (left > right) {
+        return 1
+    }
+    return 0
+}
+
+function clone(src) {
+    var target = {}
+    if (src) {
+        Object.assign(target, src)
+    }
+    return target
+}
+
+function replace(str, before, after) {
+    var parts = str.split(before)
+    return parts.join(after)
+}
+
+module.exports = {
+    replace,
+    clone,
+    sortBy,
+    findFirst,
+    addRange
+}
+},{}]},{},[2]);

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+export ELECTRON_DISABLE_SANDBOX=1
+
+exec /opt/drakon-tech.desktop/src/node_modules/.bin/electron \
+  /opt/drakon-tech.desktop/src/main.js \
+  "$@"

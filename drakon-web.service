@@ -1,0 +1,14 @@
+[Unit]
+Description=Independent DRAKON web editor
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/drakon-web
+Environment=DRAKON_DATA_DIR=/var/lib/drakon-web
+ExecStart=/usr/bin/node /root/drakon-web/server.js
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

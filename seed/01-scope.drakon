@@ -1,0 +1,15 @@
+{
+    "type": "drakon",
+    "items": {
+        "1": { "type": "end" },
+        "2": { "type": "branch", "branchId": 0, "one": "3", "content": "Подготовка" },
+        "3": { "type": "action", "one": "4", "content": "Зафиксировать заказчика, дату, оператора и цель проверки" },
+        "4": { "type": "question", "one": "5", "two": "8", "flag1": 1, "content": "Есть письменный scope, VPN-список и CIDR allowlist?" },
+        "5": { "type": "action", "one": "6", "content": "Проверить ограничения: время, допустимые методы, запрещённые системы, учётные записи" },
+        "6": { "type": "question", "one": "7", "two": "8", "flag1": 1, "content": "Ограничения понятны и не противоречат плану?" },
+        "7": { "type": "action", "one": "1", "content": "Создать запись запуска. Переход к 02-vpn.drakon" },
+        "8": { "type": "action", "one": "1", "content": "БЛОКИРОВКА: не подключаться и не сканировать. Запросить уточнение scope." }
+    },
+    "keywords": { "function": false, "machine": false, "async": false, "export": false, "algoprop": false, "lazy": false },
+    "params": "Этап 01. Scope"
+}

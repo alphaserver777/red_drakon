@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'unsafe-inline' 'self'; img-src 'self' data:">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DrakonTech</title>
+<link rel="shortcut icon" href="static/favicon.ico">
+<link rel="icon" type="image/png" href="static/favicon.png">
+<link rel="stylesheet" href="static/libs/codemirror.css">
+<link rel="stylesheet" href="static/libs/base16-dark.css">
+<link rel="stylesheet" href="static/libs/parrot.css">
+<link rel="stylesheet" href="static/libs/strict.css">
+<link rel="stylesheet" href="static/libs/cloud.css">
+<link rel="stylesheet" href="static/libs/white1.css">
+<link rel="stylesheet" href="static/libs/white2.css">
+<link rel="stylesheet" href="static/libs/zed.css">
+<link rel="stylesheet" href="static/libs/dark1.css">
+<link rel="stylesheet" href="static/libs/night.css">
+<link rel="stylesheet" href="static/libs/red.css">
+<link rel="stylesheet" href="static/libs/black.css">
+<link rel="stylesheet" href="static/libs/dark3.css">
+<link rel="stylesheet" href="static/libs/night2.css">
+<link rel="stylesheet" href="static/styles/main.css">
+</head>
+
+<body style="overflow:hidden;">
+
+<div id="loading" class="full_screen" style="background:black;">
+	<div style="width:160px; position:absolute; left:calc(50% - 80px); top:calc(50vh - 97px);">
+		<img src="static/images/drakosha-loading.png" width="160" width="160"></img>
+		<div style="color:#00a7e1; text-align:center; font-size:25px; font-family:RobotoMono">DrakonTech</div>
+		<div style="color:#00a7e1; text-align:center; font-size:15px; font-weight:bold; font-family:RobotoMono">loading...</div>
+	</div>
+</div>
+
+<canvas id="exportCanvas" style="display:none;"></canvas>
+
+<div id="wide" style="display:none;">
+</div>
+
+<div id="central" style="display: none;"></div>
+
+<div id="dialog"></div>
+
+<div id="tooltip" style="display: none;">
+</div>
+
+<div id="popup" style="display: none; cursor:pointer;">
+	<table>
+		<tr>
+			<td id="popup_text" style="padding:10px;"></td>
+			<td id="popup_close" style="padding: 10px;">Close</td>
+		</tr>
+	</table>
+</div>
+
+<script src="static/js/strings.js"></script>
+<script src="static/CallTrace.js"></script>
+<script src="static/HtmlUtils.js"></script>
+<script src="static/libs/mousetrap.js"></script>
+<script src="static/libs/fontfaceobserver.js"></script>
+<script src="static/libs/codemirror.js"></script>
+<script src="static/libs/javascript.js"></script>
+<script src="static/libs/lua.js"></script>
+<script src="static/libs/clojure.js"></script>
+<script src="static/libs/css.js"></script>
+<script src="static/libs/xml.js"></script>
+<script src="static/libs/htmlmixed.js"></script>
+
+<script src="static/libs/esprima.js"></script>
+<script src="static/libs/luaparse.js"></script>
+<script src="static/libs/escodegen.browser.min.js"></script>
+<script src="static/libs/drakongen.js"></script>
+<script src="static/libs/drakontechgen.js"></script>
+
+<script src="static/appedit.js"></script>
+
+<script src="static/Nav.js"></script>
+<script src="static/ContextMenu.js"></script>
+<script src="static/InputBox.js"></script>
+<script src="static/ToolTip.js"></script>
+<script src="static/Popup.js"></script>
+
+<script src="static/Config.js"></script>
+<script src="static/DTools.js"></script>
+<script src="static/Utils.js"></script>
+<script src="static/Theme.js"></script>
+<script src="static/TabGen4.js"></script>
+<script src="static/Multitouch.js"></script>
+<script src="static/ViewWidget.js"></script>
+<script src="static/Canvas.js"></script>
+<script src="static/highlight.js"></script>
+<script src="static/Lomma.js"></script>
+<script src="static/Behaviour.js"></script>
+
+<script src="static/EditorCtrl.js"></script>
+<script src="static/DraWidgets.js"></script>
+<script src="static/Ide3.js"></script>
+<script src="static/Ide3Logic.js"></script>
+
+<script src="static/libs/canvas2svg.js"></script>
+<script src="static/js/clojurelexer.js"></script>
+<script src="static/js/build.js"></script>
+<script src="static/js/projectimporter.js"></script>
+<script src="static/js/local.js"></script>
+<script src="tech-adapter.js"></script>
+<script src="tech-bootstrap.js"></script>
+<script src="tech-loader.js"></script>
+
+</body>
+</html>

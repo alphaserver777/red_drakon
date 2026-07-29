@@ -1,0 +1,69 @@
+{
+    "items": {
+        "1": {
+            "type": "end"
+        },
+        "49": {
+            "branchId": 0,
+            "one": "62",
+            "type": "branch"
+        },
+        "53": {
+            "one": "58",
+            "type": "action",
+            "two": "",
+            "content": "self.diagramId = diagramId"
+        },
+        "57": {
+            "type": "action",
+            "one": "64",
+            "content": "fonts = self.redraw()"
+        },
+        "58": {
+            "type": "action",
+            "one": "57",
+            "content": "resetSelection(self)"
+        },
+        "61": {
+            "type": "action",
+            "one": "53",
+            "content": "await loadImages(self)"
+        },
+        "62": {
+            "type": "action",
+            "one": "65",
+            "content": "stopMachine(self, \"mouseEvents\")"
+        },
+        "63": {
+            "type": "action",
+            "one": "1",
+            "content": "return fonts"
+        },
+        "64": {
+            "type": "action",
+            "one": "63",
+            "content": "createEventBehavior(self, diagram.type)"
+        },
+        "65": {
+            "type": "action",
+            "one": "66",
+            "content": "self.selectionMode = Boolean(\n    gconfig.defaultSelectionMode\n)"
+        },
+        "66": {
+            "one": "61",
+            "type": "action",
+            "two": "",
+            "content": "self.edit = getOrCreateUndoEdit(\n    self,\n    diagramId,\n    diagram,\n    sender,\n    canReuseUndo\n)"
+        }
+    },
+    "keywords": {
+        "function": false,
+        "machine": false,
+        "async": true,
+        "export": false,
+        "algoprop": false,
+        "lazy": false
+    },
+    "params": "diagramId\ndiagram\nsender\ncanReuseUndo",
+    "type": "drakon"
+}
