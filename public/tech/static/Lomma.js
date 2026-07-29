@@ -10424,12 +10424,16 @@ function mouseClick(x, y, button) {
 }
 
 function setTeleport(node) {
-    var target, edits
-    target = window.drakonWorkflowChooseTarget(module.storage.items[node.itemId].teleport)
-    if (!target) return
-    edits = []
-    updateItem(edits, node.itemId, {teleport: target})
-    editAndSave(edits)
+    var itemId = node.itemId || node.id
+    var item = module.storage.items[itemId]
+    if (!item) return
+    window.drakonWorkflowChooseTarget(item.teleport, function(target) {
+        var edits
+        if (!target) return
+        edits = []
+        updateItem(edits, itemId, {teleport: target})
+        editAndSave(edits)
+    })
 }
 
 function clearTeleport(node) {

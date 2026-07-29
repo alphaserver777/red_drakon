@@ -21,21 +21,36 @@
         return diagrams().find((diagram) => diagram.id === query || diagram.name === query) || null;
     }
 
-    window.drakonWorkflowChooseTarget = function (current) {
+    window.drakonWorkflowChooseTarget = function (current, onChosen) {
         const list = diagrams();
-        if (!list.length) return null;
+        if (!list.length) return;
         const currentDiagram = resolve(current);
-        const answer = window.prompt(
-            "Название следующей схемы. Доступны:\n" + list.map((item) => "• " + item.name).join("\n"),
-            currentDiagram ? currentDiagram.name : list[0].name
-        );
-        if (answer === null) return null;
-        const target = resolve(answer);
-        if (!target) {
-            window.alert("Схема с таким названием не найдена.");
-            return null;
+        const cover = document.createElement("div");
+        const box = document.createElement("div");
+        const title = document.createElement("div");
+        const select = document.createElement("select");
+        const cancel = document.createElement("button");
+        const save = document.createElement("button");
+        cover.style.cssText = "position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center";
+        box.style.cssText = "width:420px;padding:20px;background:#243645;color:#dce8ed;border:1px solid #66cbe7;font:16px Arial";
+        title.textContent = "Следующая схема";
+        title.style.cssText = "margin-bottom:12px;font-weight:bold";
+        select.style.cssText = "width:100%;padding:9px;margin-bottom:16px;background:#17242f;color:#e8f5f8;border:1px solid #66cbe7";
+        for (const item of list) {
+            const option = document.createElement("option");
+            option.value = item.id;
+            option.textContent = item.name;
+            option.selected = currentDiagram && item.id === currentDiagram.id;
+            select.appendChild(option);
         }
-        return target.id;
+        cancel.textContent = "Отмена";
+        save.textContent = "Выбрать";
+        for (const button of [cancel, save]) button.style.cssText = "float:right;margin-left:8px;padding:8px 14px";
+        cancel.onclick = () => cover.remove();
+        save.onclick = () => { const target = resolve(select.value); cover.remove(); onChosen(target && target.id); };
+        box.append(title, select, cancel, save);
+        cover.appendChild(box);
+        document.body.appendChild(cover);
     };
 
     window.drakonWorkflowFollow = function (targetId) {
