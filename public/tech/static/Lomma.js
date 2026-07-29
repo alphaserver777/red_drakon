@@ -3587,6 +3587,23 @@ function buildMenuByType(node) {
         )
         pushSeparator(menu)
     }
+    if (node.type != "header" && node.type != "params" && window.drakonWorkflowChooseTarget) {
+        pushMenuItem(
+            menu,
+            "ПЕРЕЙТИ К СХЕМЕ…",
+            null,
+            function() { setTeleport(node) }
+        )
+        if (module.storage.items[node.itemId].teleport) {
+            pushMenuItem(
+                menu,
+                "УБРАТЬ ПЕРЕХОД К СХЕМЕ",
+                null,
+                function() { clearTeleport(node) }
+            )
+        }
+        pushSeparator(menu)
+    }
     cf = getCopyFunction(node)
     if (cf) {
         pushMenuItem(
@@ -7646,6 +7663,14 @@ function getFormatForIcon(type, itemId) {
         format.lineColor = status.line
         format.lineThickness = status.active ? 3 : 2
     }
+    // Переход в другую схему — только навигационная метка. Сама схема и её
+    // журнал не меняются; синий цвет отличает такой блок от обычного действия.
+    var item = module.storage.items[itemId]
+    if (item && item.teleport && !status) {
+        format.fillColor = "#155f91"
+        format.lineColor = "#7cecff"
+        format.lineThickness = 3
+    }
     return format
 }
 
@@ -10370,6 +10395,12 @@ function mouseClick(x, y, button) {
     if (prim) {
         addTrace("found vi", [prim.id])
         if (prim.id) {
+            var teleportItem = module.storage.items[prim.id]
+            if (button === 0 && teleportItem && teleportItem.teleport && window.drakonWorkflowFollow) {
+                if (window.drakonWorkflowFollow(teleportItem.teleport)) {
+                    return { mustRedraw: false }
+                }
+            }
             printPrim(prim)
             if (isSelected(prim.id)) {
                 if ((openOnClick) && (button === 0)) {
@@ -10398,6 +10429,21 @@ function mouseClick(x, y, button) {
     return {
     	mustRedraw: true
     }
+}
+
+function setTeleport(node) {
+    var target, edits
+    target = window.drakonWorkflowChooseTarget(module.storage.items[node.itemId].teleport)
+    if (!target) return
+    edits = []
+    updateItem(edits, node.itemId, {teleport: target})
+    editAndSave(edits)
+}
+
+function clearTeleport(node) {
+    var edits = []
+    updateItem(edits, node.itemId, {teleport: null})
+    editAndSave(edits)
 }
 
 function moveBranchIdsLeft(branchId) {

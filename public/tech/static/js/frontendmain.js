@@ -792,6 +792,9 @@
         var logic = new Ide3Logic(spaceId, folderName, userId, ide, translate)
         ide.logic = logic        
         gLogic = logic
+        // Переходы между схемами используют тот же экземпляр навигации, что и
+        // дерево проекта. Это не ссылка в браузере и не отдельная копия схемы.
+        window.drakonTechLogic = logic
         window.onresize = ide.orderResize	        
         window.onmouseout = function(evt) { evt.preventDefault() }
         
