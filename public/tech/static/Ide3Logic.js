@@ -4361,7 +4361,7 @@ function Ide3Logic(gSpaceId, folderName, gUserId, browser, translate) {
   }
 
   function isHuman(folder) {
-    if (folder.language && !(folder.language === "LANG_HUMAN")) {
+    if (folder.language && !(folder.language === "LANG_HUMAN") && !(folder.language === "MARKDOWN")) {
       return false;
     } else {
       return true;

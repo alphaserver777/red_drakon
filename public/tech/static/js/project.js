@@ -166,6 +166,8 @@
             return ".kum";
         } else if (language === "C2606") {
             return ".c";                  
+        } else if (language === "MARKDOWN") {
+            return ".md";
         } else {
             // Error: Unexpected case value language
             return ".js";
@@ -250,6 +252,7 @@
         var format = arg.format;
         var deps = arg.deps;
         var mainText = arg.mainText;
+        var iconWidth = arg.iconWidth;
         
         error.innerText = "";
         var message = "";
@@ -291,7 +294,8 @@
             path: path.value,
             name: name.value,
             language: language.value,
-            outputFile: output.value
+            outputFile: output.value,
+            iconWidth: Number(iconWidth.value)
         };
         
         if (isJavaScript(language)) {
@@ -324,6 +328,7 @@
         var format = arg.format;
         var deps = arg.deps;
         var mainText = arg.mainText;
+        var iconWidth = arg.iconWidth;
         
         error.innerText = "";
         var message = "";
@@ -334,11 +339,16 @@
             error.innerText = message;
             return;
         }
+        if (!Number.isFinite(Number(iconWidth.value)) || Number(iconWidth.value) < 80 || Number(iconWidth.value) > 500) {
+            error.innerText = "Ширина иконок должна быть от 80 до 500";
+            return;
+        }
         
         // Do update project
         var project = {
             language: language.value,
-            outputFile: output.value
+            outputFile: output.value,
+            iconWidth: Number(iconWidth.value)
         };
         
         if (isJavaScript(language)) {
@@ -405,6 +415,7 @@
         addComboboxOption(languageCombo, "PFL2605", "Перфолента");
         addComboboxOption(languageCombo, "OS2605", "OneScript");
         addComboboxOption(languageCombo, "KUMIR2606", "Кумир");
+        addComboboxOption(languageCombo, "MARKDOWN", "Markdown — текст иконок");
         setValue(languageCombo, globalOptions.language || "JS2604");
         
         // Format
@@ -425,6 +436,15 @@
         addLabel(dialog, tr("Output file"));
         var outputText = createTextInput(globalOptions.outputFile);
         add(dialog, outputText);
+
+        addSpace(dialog);
+        addLabel(dialog, "Ширина иконок");
+        var iconWidthText = createTextInput(globalOptions.iconWidth || 180);
+        iconWidthText.type = "number";
+        iconWidthText.min = "80";
+        iconWidthText.max = "500";
+        iconWidthText.step = "10";
+        add(dialog, iconWidthText);
         
         // Deps
         var depsDiv = document.createElement("div");
@@ -497,7 +517,8 @@
             output: outputText,
             format: formatCombo,
             deps: depsText,
-            mainText: mainText
+            mainText: mainText,
+            iconWidth: iconWidthText
         };
         
         var createAction = bindCallback(onOk, createProjectArgument);

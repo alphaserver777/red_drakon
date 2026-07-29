@@ -43,7 +43,7 @@ function buildWindow(headerText, oldText, cmOptions) {
     error.style.padding = "3px"
     error.style.display = "none"
     var editor;
-    if (cmOptions) {
+    if (cmOptions && cmOptions.mode) {
         editor = make(main, "textarea")
         editor.style.fontSize = "14px"
         editor.style.fontFamily = Config.EDITOR_FONT
@@ -76,6 +76,9 @@ function buildWindow(headerText, oldText, cmOptions) {
             oldText
         )
     }
+    if (cmOptions && cmOptions.workflowEditor) {
+        globs.getWorkflow = buildWorkflowEditor(main, cmOptions.workflow || {}, cmOptions.workflowQuestion)
+    }
     var panel = make(main, "div")
     panel.style.height = "40px"
     var butts = make(panel, "div")
@@ -106,6 +109,63 @@ function buildWindow(headerText, oldText, cmOptions) {
     save.onclick = onSave
     cancel.onclick = hide
     return main
+}
+
+function buildWorkflowEditor(parent, workflow, isQuestion) {
+    var box = make(parent, "div")
+    box.style.padding = "10px"
+    box.style.borderBottom = "solid 1px #707070"
+    box.style.background = "#303840"
+    var title = make(box, "div")
+    HtmlUtils.setDivText(title, "Исполнение алгоритма")
+    title.style.color = "white"
+    title.style.fontWeight = "bold"
+    title.style.marginBottom = "6px"
+    var fields = {}
+    var add = function(label, key, value, placeholder) {
+        var row = make(box, "div")
+        row.style.display = "inline-block"
+        row.style.verticalAlign = "top"
+        row.style.width = "49%"
+        row.style.marginRight = "1%"
+        row.style.marginBottom = "6px"
+        var caption = make(row, "div")
+        HtmlUtils.setDivText(caption, label)
+        caption.style.color = "#d8d8d8"
+        caption.style.fontSize = "12px"
+        var input = make(row, "input")
+        input.type = "text"
+        input.value = value || ""
+        input.placeholder = placeholder || ""
+        input.style.boxSizing = "border-box"
+        input.style.width = "100%"
+        input.style.padding = "5px"
+        input.style.background = "#20272d"
+        input.style.color = "#f0f0f0"
+        input.style.border = "solid 1px #607080"
+        fields[key] = input
+    }
+    add("Обработчик", "handler", workflow.handler, "например: mitre-command")
+    add("Команды MITRE", "commandIds", (workflow.commandIds || []).join(", "), "4227, 3735")
+    add("Входные данные", "inputs", (workflow.inputs || []).join(", "), "approved_cidrs")
+    add("Результаты", "outputs", (workflow.outputs || []).join(", "), "hosts_ping.xml")
+    if (isQuestion) {
+        add("Условие", "decision", workflow.decision, "например: live_ips_present")
+    }
+    var list = function(value) {
+        return value.split(",").map(function(x) { return x.trim() }).filter(Boolean)
+    }
+    return function() {
+        var result = {
+            handler: fields.handler.value.trim(),
+            commandIds: list(fields.commandIds.value),
+            inputs: list(fields.inputs.value),
+            outputs: list(fields.outputs.value)
+        }
+        if (fields.decision) result.decision = fields.decision.value.trim()
+        if (!result.handler && !result.commandIds.length && !result.inputs.length && !result.outputs.length && !result.decision) return null
+        return result
+    }
 }
 
 function createPlainTextEditor(parent, fontFamily, fontSize, oldText) {
@@ -429,7 +489,7 @@ function onCrmKeyDown(a, evt, c) {
 }
 
 function onSave() {
-    var text
+    var text, workflow
     if (globs.editor) {
         text = globs.editor.value
     } else {
@@ -440,7 +500,8 @@ function onSave() {
         if (message) {
             showError(message)
         } else {
-            globs.callback(text)
+            workflow = globs.getWorkflow ? globs.getWorkflow() : undefined
+            globs.callback(text, workflow)
             if (globs.isAsync) {
                 
             } else {
@@ -448,7 +509,8 @@ function onSave() {
             }
         }
     } else {
-        globs.callback(text)
+        workflow = globs.getWorkflow ? globs.getWorkflow() : undefined
+        globs.callback(text, workflow)
         if (globs.isAsync) {
             
         } else {

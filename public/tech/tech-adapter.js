@@ -11,7 +11,7 @@
     }
 
     function normalise(project) {
-        return {
+        const normalised = {
             name: project.name,
             language: project.language || "JS2604",
             outputFile: project.outputFile || project.output || `../${project.name}.js`,
@@ -19,6 +19,9 @@
             mainFun: project.mainFun || "",
             format: project.format || "unit"
         };
+        const iconWidth = Number(project.iconWidth);
+        if (Number.isFinite(iconWidth)) normalised.iconWidth = iconWidth;
+        return normalised;
     }
 
     window.backend.getDocumentsPath = async () => "web://projects";

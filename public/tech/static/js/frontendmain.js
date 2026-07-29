@@ -509,6 +509,7 @@
             name: project.name,
             language: project.language,
             outputFile: project.outputFile,
+            iconWidth: project.iconWidth,
             dependencies: project.dependencies,
             mainFun: project.mainFun,
             format: project.format

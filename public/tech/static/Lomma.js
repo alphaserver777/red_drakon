@@ -6646,6 +6646,7 @@ function findDraggable(x, y) {
     }
 }
 
+
 function findEdge(x, y) {
     return findElementAt(
         module.visuals.edges,
@@ -7704,20 +7705,40 @@ function getFormatForIcon(type, itemId) {
 }
 
 function getAutoNumber(itemId) {
-    if (!module.visuals || !module.visuals.nodes) return null
-    var rows = module.visuals.nodes.rows
-    var nodes = Object.keys(rows).map(function(key) { return rows[key] }).filter(function(node) {
-        return node.itemId && (node.type === "action" || node.type === "question")
-    })
-    nodes.sort(function(left, right) {
-        if (left.y !== right.y) return left.y - right.y
-        if (left.x !== right.x) return right.x - left.x
-        return String(left.itemId).localeCompare(String(right.itemId), undefined, {numeric:true})
-    })
-    for (var index = 0; index < nodes.length; index++) {
-        if (String(nodes[index].itemId) === String(itemId)) return index + 1
+    var items, order, seen
+    if (!module.storage || !module.storage.items) return null
+    items = module.storage.items
+    order = []
+    seen = {}
+    // Силуэт — не обычная плоскость: ветви физически находятся на разных
+    // высотах. Поэтому нумеруем по структуре DRAKON, а не по координатам.
+    // Ветка читается целиком, вопрос — сначала «Да» (one), затем «Нет» (two).
+    var visit = function(id, branchId) {
+        var item
+        if (!id || seen[id]) return
+        item = items[id]
+        if (!item) return
+        if (item.type === "branch") {
+            if (item.branchId !== branchId) return
+            visit(item.one, branchId)
+            return
+        }
+        seen[id] = true
+        if (item.type === "action" || item.type === "question") order.push(String(id))
+        if (item.type === "question") {
+            visit(item.one, branchId)
+            visit(item.two, branchId)
+        } else {
+            visit(item.one, branchId)
+        }
     }
-    return null
+    var branches = Object.keys(items).map(function(id) { return items[id] }).filter(function(item) {
+        return item.type === "branch" && typeof item.branchId === "number"
+    })
+    branches.sort(function(left, right) { return left.branchId - right.branchId })
+    branches.forEach(function(branch) { visit(branch.one, branch.branchId) })
+    var index = order.indexOf(String(itemId))
+    return index === -1 ? null : index + 1
 }
 
 function drawAutoNumber(render, texId, item) {
@@ -8941,8 +8962,61 @@ function isEnd(state) {
     return state.current.type == "end"
 }
 
+function isMarkdown() {
+    var current, project, projects
+    if (module.language === "MARKDOWN") {
+        return true
+    }
+    // Старые схемы содержат прежний язык в собственном JSON. В веб-версии
+    // выбранный язык проекта должен иметь приоритет для всех его схем.
+    try {
+        current = localStorage.getItem("drakon-tech-current-project")
+        projects = JSON.parse(localStorage.getItem("drakon-tech-projects") || "{}")
+        project = projects[current]
+        return !!(project && project.language === "MARKDOWN")
+    } catch (error) {
+        return false
+    }
+}
+
 function isHuman() {
-    return module.language === "LANG_HUMAN"
+    return (module.language === "LANG_HUMAN") || isMarkdown()
+}
+
+function getProjectIconWidth() {
+    var current, project, projects, width
+    try {
+        current = localStorage.getItem("drakon-tech-current-project")
+        projects = JSON.parse(localStorage.getItem("drakon-tech-projects") || "{}")
+        project = projects[current]
+        width = Number(project && project.iconWidth)
+        if (Number.isFinite(width) && width >= Config.MIN_ICON_WIDTH) {
+            return width
+        }
+    } catch (error) {
+        // Для настольного варианта остаётся ширина по умолчанию.
+    }
+    return null
+}
+
+function formatIconText(text) {
+    if (!isMarkdown()) {
+        return text
+    }
+    // Схема и её связи не меняются: это только представление текста в иконке.
+    // В иконках каждый перенос, введённый оператором, является осознанным:
+    // команда, её параметры и путь артефакта должны располагаться на отдельных
+    // строках. Склеивание Markdown-строк в абзац делало команды шире иконки.
+    var lines = (text || "").split("\n")
+    return lines.map(function(line) {
+        return line.trim()
+    }).join("\n")
+        .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+        .replace(/^(\s*)[-*+]\s+/gm, "$1• ")
+        .replace(/\*\*([^*]+)\*\*/g, "$1")
+        .replace(/__([^_]+)__/g, "$1")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")
 }
 
 function isKeyword(text) {
@@ -12427,8 +12501,8 @@ function requestSourceFlow(render, node) {
     if ((isHuman()) || (isPreproc(node.text))) {
         return flowText(
             render,
-            node.text,
-            Config.DEF_ICON_WIDTH
+            formatIconText(node.text),
+            getIconTextWidth()
         )
     } else {
         return flowSourceCode(
@@ -12442,8 +12516,8 @@ function requestSourceFlow(render, node) {
 function requestTextFlow(render, node) {
     return flowText(
         render,
-        node.text,
-        Config.DEF_ICON_WIDTH
+        formatIconText(node.text),
+        getIconTextWidth()
     )
 }
 
@@ -13187,15 +13261,37 @@ function setFreeItemSize(id, x, y, width, height) {
 }
 
 function setItemWidth(id, width) {
-    
+    var edits
+    if (module.readonly) {
+        return
+    }
+    // DRAKON строит схему автоматически, поэтому ширина — свойство схемы,
+    // а не отдельного блока. Перетаскивание маркера меняет её для всех
+    // рабочих иконок и сохраняется в JSON диаграммы.
+    width = Math.max(Config.MIN_ICON_WIDTH, snapSize(width))
+    edits = []
+    updateDiagram(edits, {iconWidth: width})
+    editAndSave(edits)
+}
+
+function getIconTextWidth() {
+    var width = getProjectIconWidth()
+    if (width) {
+        return width
+    }
+    width = Number(module.storage && module.storage.iconWidth)
+    if (Number.isFinite(width) && width >= Config.MIN_ICON_WIDTH) {
+        return width
+    }
+    return Config.DEF_ICON_WIDTH
 }
 
 function setKeywordColor(token) {
     token.color = Theme.get("keyword")
 }
 
-function setNodeText(nodeId, text) {
-    var edits, node
+function setNodeText(nodeId, text, workflow) {
+    var edits, node, changes
     if (module.readonly) {
         
     } else {
@@ -13222,11 +13318,11 @@ function setNodeText(nodeId, text) {
                 node.type,
                 text
             )
-            updateItem(
-                edits,
-                node.itemId,
-                {text: text}
-            )
+            changes = {text: text}
+            if (workflow !== undefined) {
+                changes.workflow = workflow
+            }
+            updateItem(edits, node.itemId, changes)
         }
         editAndSave(edits)
     }
@@ -13323,22 +13419,27 @@ function setSameHeightForSelect(select) {
 
 function setSameWidth(skewer) {
     var nodes, width
-    width = 0
-    var _ind3902 = 0;
-    var _col3902 = skewer.nodes;
-    var _len3902 = _col3902.length;
-    while (true) {
-        if (_ind3902 < _len3902) {
-            
-        } else {
-            break;
+    width = getProjectIconWidth()
+    if (!width) {
+        width = Number(module.storage && module.storage.iconWidth)
+    }
+    if (!(Number.isFinite(width) && width >= Config.MIN_ICON_WIDTH)) {
+        width = 0
+        var _ind3902 = 0;
+        var _col3902 = skewer.nodes;
+        var _len3902 = _col3902.length;
+        while (true) {
+            if (_ind3902 < _len3902) {
+            } else {
+                break;
+            }
+            var node = _col3902[_ind3902];
+            width = Math.max(
+                width,
+                node.w
+            )
+            _ind3902++;
         }
-        var node = _col3902[_ind3902];
-        width = Math.max(
-            width,
-            node.w
-        )
-        _ind3902++;
     }
     skewer.boundary = width
     nodes = skewer.nodes.filter(
@@ -13973,8 +14074,8 @@ function startEditText(nodeId) {
         old = node.text
         x = node.x - node.w - 5
         y = node.y - node.h - 29
-        setTextProc = function(text) {
-            setNodeText(nodeId, text)
+        setTextProc = function(text, workflow) {
+            setNodeText(nodeId, text, workflow)
         }
         cmOptions = undefined
         if (node.type == "header") {
@@ -13982,7 +14083,7 @@ function startEditText(nodeId) {
             validate = validateModuleName
         } else {
             if (isHuman()) {
-                
+                cmOptions = {}
             } else {
                 if (module.language === "JS") {
                     mode = "javascript"
@@ -13998,6 +14099,9 @@ function startEditText(nodeId) {
                 	theme: "base16-dark"
                 }
             }
+            cmOptions.workflowEditor = true
+            cmOptions.workflowQuestion = node.type == "question"
+            cmOptions.workflow = (module.storage.items[node.itemId] || {}).workflow || {}
             title = tr("MES_CHANGE_ITEM_TEXT") +
              ": " + node.itemId
             validate = validateItemText
