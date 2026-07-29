@@ -70,7 +70,6 @@ function Action_draw(render, item) {
         item
     )
     drawAutoNumber(render, texId, item)
-    drawTeleportMark(render, texId, item)
 }
 
 function Action_flow(render, item) {
@@ -84,8 +83,7 @@ function Action_flow(render, item) {
 function Address_draw(render, item) {
     var format, pos, texId
     format = getFormatForIcon(
-        item.type,
-        item.itemId || item.id
+        item.type
     )
     texId = makeCustomTexture(
         render,
@@ -150,7 +148,6 @@ function Address_draw(render, item) {
         item.tb,
         pos
     )
-    drawTeleportMark(render, texId, item)
 }
 
 function Branch_draw(render, item) {
@@ -7701,13 +7698,6 @@ function drawAutoNumber(render, texId, item) {
     render.drawText(texId, String(number), item.x - item.w + 4, item.y - item.h - 3, "#dfead2")
 }
 
-function drawTeleportMark(render, texId, item) {
-    var storageId = item.itemId || item.id
-    var source = module.storage.items[storageId]
-    if (!source || !source.teleport) return
-    render.drawText(texId, "↗", item.x + item.w - 18, item.y - item.h + 4, "#e6fbff")
-}
-
 function getIconCount(graph) {
     var result = 0;
     return result;
@@ -10405,7 +10395,7 @@ function mouseClick(x, y, button) {
     if (prim) {
         addTrace("found vi", [prim.id])
         if (prim.id) {
-            var teleportItem = module.storage.items[prim.itemId || prim.id]
+            var teleportItem = module.storage.items[prim.id]
             if (button === 0 && teleportItem && teleportItem.teleport && window.drakonWorkflowFollow) {
                 if (window.drakonWorkflowFollow(teleportItem.teleport)) {
                     return { mustRedraw: false }
