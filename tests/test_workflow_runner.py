@@ -32,6 +32,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(RUNNER.Journal.open(output).data["runId"], data["runId"])
         output.unlink()
 
+    def test_terminal_result_requires_final_block_15(self):
+        output = ROOT / ".test-run.json"
+        journal = RUNNER.Journal(output, 1, "HEAD", "abc", True)
+        journal.add("11", {"status": "completed"})
+        with self.assertRaises(ValueError):
+            journal.terminal_result()
+        journal.add("15", {"status": "live", "vpn": "disconnected"})
+        self.assertEqual(journal.terminal_result()["status"], "live")
+        output.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

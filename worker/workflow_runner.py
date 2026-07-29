@@ -124,6 +124,14 @@ class Journal:
         temporary.write_text(json.dumps(self.data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         os.replace(temporary, self.path)
 
+    def terminal_result(self):
+        """Итог существует только после финального блока схемы."""
+        last = self.data["events"][-1]
+        result = last.get("result", {})
+        if last.get("block") != "15" or result.get("status") not in {"live", "empty"}:
+            raise ValueError("Эксперимент не завершён: нет успешного финального блока 15")
+        return result
+
 
 def git_sha(repo, ref, fetch):
     if fetch:
@@ -257,14 +265,16 @@ def record_hosts(task_id, engagement_id, hosts, artifact):
     }
     for index, host in enumerate(hosts):
         if index and index % 10 == 0:
-            subprocess.run([str(pc_api), "task-heartbeat", str(task_id)], check=True, env=environment)
-        subprocess.run([str(pc_api), "host", host], check=True, env=environment)
+            subprocess.run([str(pc_api), "task-heartbeat", str(task_id)], check=True, env=environment,
+                           capture_output=True, text=True)
+        subprocess.run([str(pc_api), "host", host], check=True, env=environment,
+                       capture_output=True, text=True)
         subprocess.run([
             str(pc_api), "timeline", host,
             "--summary", "Обнаружение живого хоста workflow 08",
             "--command", "nmap -sn -n (см. файл доказательства)",
             "--result", f"Хост отвечает; доказательство: {artifact.name}", "--status", "success",
-        ], check=True, env=environment)
+        ], check=True, env=environment, capture_output=True, text=True)
 
 
 def dry_result(scenario):
@@ -314,6 +324,7 @@ def main():
         journal.add("12", {"status": status, "count": len(hosts), "recovered": True})
         journal.add(block, {"status": status, "hosts": hosts, "recovered": True})
         journal.add("15", {"status": status, "vpn": "already-disconnected", "evidence": str(artifact)})
+        journal.terminal_result()
         print(json.dumps({"status": status, "journal": str(journal.path), "sha": resolved, "tag": tag, "hosts": hosts, "recovered": True}, ensure_ascii=False))
         return 0
     if args.resume:
@@ -344,6 +355,7 @@ def main():
         if finish["status"] == "error":
             print(json.dumps({"status": "error", "journal": str(journal.path), "sha": resolved, "tag": tag}, ensure_ascii=False))
             return 2
+        journal.terminal_result()
         print(json.dumps({"status": status, "journal": str(journal.path), "sha": resolved, "tag": tag,
                           "coverage": snapshot["routes"], "hosts": hosts}, ensure_ascii=False))
         return 0
