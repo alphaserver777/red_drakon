@@ -69,6 +69,7 @@ function Action_draw(render, item) {
         item.tb,
         item
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function Action_flow(render, item) {
@@ -1468,6 +1469,7 @@ function Question_draw(render, item) {
         item.tb,
         box
     )
+    drawAutoNumber(render, texId, item)
     if (item.flag1) {
         leftWidth = wy
         rightWidth = wn
@@ -7645,6 +7647,33 @@ function getFormatForIcon(type, itemId) {
         format.lineThickness = status.active ? 3 : 2
     }
     return format
+}
+
+function getAutoNumber(itemId) {
+    if (!module.visuals || !module.visuals.nodes) return null
+    var nodes = module.visuals.nodes.rows.filter(function(node) {
+        return node.itemId && (node.type === "action" || node.type === "question")
+    })
+    nodes.sort(function(left, right) {
+        if (left.y !== right.y) return left.y - right.y
+        if (left.x !== right.x) return right.x - left.x
+        return String(left.itemId).localeCompare(String(right.itemId), undefined, {numeric:true})
+    })
+    for (var index = 0; index < nodes.length; index++) {
+        if (String(nodes[index].itemId) === String(itemId)) return index + 1
+    }
+    return null
+}
+
+function drawAutoNumber(render, texId, item) {
+    var number = getAutoNumber(item.id)
+    if (!number) return
+    var radius = 14
+    var x = item.x + item.w - radius - 4
+    var y = item.y - item.h + radius + 4
+    var format = { fillColor: "#e00018", lineColor: "#ffffff", lineThickness: 2, lineStyle: "solid", shadow: null }
+    render.drawShape(texId, "circle", x, y, [radius, radius], format)
+    render.drawText(texId, String(number), x - (number > 9 ? 7 : 4), y + 5, "#ffffff")
 }
 
 function getIconCount(graph) {
