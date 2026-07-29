@@ -11,6 +11,10 @@ const dataDir = process.env.DRAKON_DATA_DIR || path.join(root, "data");
 const statePath = path.join(dataDir, "state.json");
 const techStatePath = path.join(dataDir, "tech-state.json");
 const port = Number(process.env.PORT || 13339);
+const workflowDiagrams = {
+  "08-no-creds-siluet": "d09",
+  "09-no-creds-full-siluet": "d10",
+};
 const mime = { ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".ico": "image/x-icon", ".js": "application/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png" };
 let state;
 let techState;
@@ -68,7 +72,7 @@ function saveTechState() {
 }
 
 async function approvedWorkflow(name) {
-  if (name !== "08-no-creds-siluet") throw Object.assign(new Error("Неизвестный workflow"), { code: "ENOENT" });
+  if (!(name in workflowDiagrams)) throw Object.assign(new Error("Неизвестная схема"), { code: "ENOENT" });
   const diagram = JSON.parse(await fs.readFile(path.join(root, "workflows", `${name}.drakon`), "utf8"));
   return { diagram, source: "approved" };
 }
@@ -78,7 +82,7 @@ async function syncTechDiagram(diagram) {
   for (const [key, value] of Object.entries(techState)) {
     try {
       const candidate = JSON.parse(value);
-      if (candidate?.name === "08-no-creds-siluet") {
+      if (candidate?.name === diagram.name) {
         // DRAKON Tech может при сохранении убрать parent. Без него схема
         // остаётся в «Недавнее», но исчезает из дерева проекта.
         techState[key] = JSON.stringify({ ...diagram, parent: "reglament 1" });
@@ -89,7 +93,7 @@ async function syncTechDiagram(diagram) {
   if (!found) {
     const folderKey = "reglament-folders";
     const folders = JSON.parse(techState[folderKey] || "{}");
-    const diagramKey = "reglament d09";
+    const diagramKey = `reglament ${workflowDiagrams[diagram.name]}`;
     folders[diagramKey] = true;
     techState[folderKey] = JSON.stringify(folders);
     techState[diagramKey] = JSON.stringify({ ...diagram, parent: "reglament 1" });
@@ -166,7 +170,9 @@ const server = http.createServer(async (request, response) => {
 });
 
 loadState().then(async () => {
-  const approved = await approvedWorkflow("08-no-creds-siluet");
-  await syncTechDiagram(approved.diagram);
+  for (const name of Object.keys(workflowDiagrams)) {
+    const approved = await approvedWorkflow(name);
+    await syncTechDiagram(approved.diagram);
+  }
   server.listen(port, "127.0.0.1", () => console.log(`DRAKON: http://127.0.0.1:${port}`));
 }).catch((error) => { console.error(error); process.exitCode = 1; });
