@@ -1,7 +1,7 @@
-#workflow-monitor { position: fixed; z-index: 1000; right: 12px; bottom: 12px; width: 360px; padding: 10px; display: grid; gap: 7px; color: #dce9f5; background: #182633; border: 1px solid #4a789a; font: 12px Arial, sans-serif; box-shadow: 0 3px 18px #000a; }
-#workflow-monitor select, #workflow-monitor button { min-height: 28px; color: #eaf5ff; background: #243849; border: 1px solid #527b9d; border-radius: 3px; }
+#workflow-monitor { position: fixed; z-index: 1000; left: 760px; right: 210px; top: 6px; min-height: 38px; padding: 4px 8px; display: grid; grid-template-columns: auto minmax(110px, 0.7fr) minmax(170px, 1.2fr) 88px minmax(120px, 1fr); align-items: center; gap: 7px; color: #dce9f5; background: #263945; border: 1px solid #4a789a; font: 12px Arial, sans-serif; }
+#workflow-monitor select, #workflow-monitor button { min-width: 0; min-height: 26px; color: #eaf5ff; background: #243849; border: 1px solid #527b9d; border-radius: 3px; }
 .workflow-monitor-state { color: #9fc5df; line-height: 1.35; }
-.workflow-monitor-steps { display: flex; flex-wrap: wrap; gap: 4px; max-height: 150px; overflow: auto; }
+.workflow-monitor-steps { display: none; }
 .workflow-step { padding: 3px 6px; }
 .workflow-step.running { border-color: #5bd4ff !important; background: #115e9c !important; }
 .workflow-step.checkpoint { border-color: #7cecff !important; background: #176b83 !important; }
