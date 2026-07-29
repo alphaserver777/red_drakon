@@ -81,7 +81,30 @@ function Action_flow(render, item) {
 }
 
 function Address_draw(render, item) {
-    var format, pos, texId
+    var format, pos, source, texId
+    // Выходная ветка с переходом рисуется как отдельный конечный значок:
+    // та же форма, что у «Конец», но с именем следующей схемы.
+    source = module.storage.items[item.itemId]
+    if (source && source.teleport) {
+        format = getFormatForIcon("end")
+        texId = makeCustomTexture(
+            render,
+            item.x,
+            item.y,
+            item.w,
+            item.h
+        )
+        render.drawShape(
+            texId,
+            "beginend",
+            item.x,
+            item.y,
+            [item.w, item.h],
+            format
+        )
+        drawCenterTextInRect(render, texId, item.tb, item)
+        return
+    }
     format = getFormatForIcon(
         item.type
     )
