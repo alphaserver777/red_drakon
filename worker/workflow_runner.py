@@ -18,6 +18,7 @@ import sys
 import tempfile
 import time
 from urllib.parse import urlparse
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 import uuid
 
@@ -107,17 +108,30 @@ class EventDelivery:
         token = os.environ.get("AGENT_API_TOKEN", "")
         if not base_url or not token:
             return
-        for path in sorted(self.outbox.glob("*.json")):
-            try:
-                payload = path.read_bytes()
-                task_id = json.loads(payload).get("taskId")
-                request = Request(f"{base_url}/api/agent-tasks/{task_id}/workflow-events", data=payload, method="POST",
-                                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
-                with urlopen(request, timeout=10) as response:
-                    if response.status not in (200, 201):
-                        return
-                path.unlink(missing_ok=True)
-            except Exception:
+        # Имена файлов могут совпасть по секунде; порядок определяется только
+        # успешной записью в удалённую хеш-цепочку, а не именем файла.
+        # Несколько проходов разрешают старую очередь до исправления.
+        pending = list(self.outbox.glob("*.json"))
+        for _ in range(len(pending) or 1):
+            progressed = False
+            for path in list(pending):
+                try:
+                    payload = path.read_bytes()
+                    task_id = json.loads(payload).get("taskId")
+                    request = Request(f"{base_url}/api/agent-tasks/{task_id}/workflow-events", data=payload, method="POST",
+                                      headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+                    with urlopen(request, timeout=10) as response:
+                        if response.status not in (200, 201):
+                            continue
+                    path.unlink(missing_ok=True)
+                    pending.remove(path)
+                    progressed = True
+                except HTTPError:
+                    # 409 means a predecessor is still in this local queue.
+                    continue
+                except Exception:
+                    return
+            if not pending or not progressed:
                 return
 
 
