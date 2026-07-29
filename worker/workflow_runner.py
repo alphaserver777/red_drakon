@@ -215,7 +215,7 @@ def ensure_claimed_task(task_id):
         if task.get("taskId") != task_id:
             raise RuntimeError(f"Воркер уже занят задачей {task.get('taskId')}, а не {task_id}")
         subprocess.run([str(pc_api), "task-heartbeat", str(task_id)], check=True, capture_output=True, text=True)
-        return {"status": "already-claimed", "taskId": task_id}
+        return {"status": "already-claimed", "taskId": task_id, "engagementId": task.get("engagementId")}
     claimed = subprocess.run([str(pc_api), "task-claim-next"], text=True, capture_output=True, check=True)
     task = json.loads(claimed.stdout)
     claimed_id = task.get("id")
@@ -223,7 +223,7 @@ def ensure_claimed_task(task_id):
         subprocess.run([str(pc_api), "task-release", str(claimed_id), "--reason",
                         "workflow SHA ожидает другую задачу"], check=False, capture_output=True, text=True)
         raise RuntimeError(f"Первая совместимая задача — {claimed_id}, а не {task_id}")
-    return {"status": "claimed-from-queue", "taskId": task_id}
+    return {"status": "claimed-from-queue", "taskId": task_id, "engagementId": task.get("engagementId")}
 
 
 def discovery(routes, artifact):
@@ -247,18 +247,21 @@ def discovery(routes, artifact):
     return sorted(live)
 
 
-def record_hosts(task_id, hosts, artifact):
+def record_hosts(task_id, engagement_id, hosts, artifact):
     pc_api = Path("/root/agent_api/pc_api.py")
     if not pc_api.is_file():
         raise FileNotFoundError("Не найден /root/agent_api/pc_api.py")
-    for host in hosts:
-        subprocess.run([str(pc_api), "host", host], check=True)
+    environment = os.environ | {"OPENCODE_ENGAGEMENT_ID": str(engagement_id)}
+    for index, host in enumerate(hosts):
+        if index and index % 10 == 0:
+            subprocess.run([str(pc_api), "task-heartbeat", str(task_id)], check=True, env=environment)
+        subprocess.run([str(pc_api), "host", host], check=True, env=environment)
         subprocess.run([
             str(pc_api), "timeline", host,
             "--summary", "Обнаружение живого хоста workflow 08",
             "--command", "nmap -sn -n (см. файл доказательства)",
             "--result", f"Хост отвечает; доказательство: {artifact.name}", "--status", "success",
-        ], check=True)
+        ], check=True, env=environment)
 
 
 def dry_result(scenario):
@@ -285,12 +288,31 @@ def main():
     parser.add_argument("--execute", action="store_true", help="Разрешить только VPN и остановку перед discovery")
     parser.add_argument("--resume", type=Path, help="Продолжить журнал из before-discovery")
     parser.add_argument("--approve-discovery", action="store_true", help="Явно разрешить discovery при --resume")
+    parser.add_argument("--finalize", type=Path, help="Передать в панель сохранённый результат discovery после сбоя")
     args = parser.parse_args()
     if args.task_id <= 0:
         parser.error("task ID должен быть положительным")
     resolved = git_sha(args.repo, args.schema_ref, args.fetch)
     _, contract = load_workflow(args.repo, resolved)
     tag = approved_tag(args.repo, resolved)
+    if args.finalize:
+        if args.dry_run or args.execute or args.resume or args.approve_discovery:
+            parser.error("Финализация не совмещается с другими режимами")
+        journal = Journal.open(args.finalize)
+        if journal.data.get("taskId") != args.task_id or journal.data.get("resolvedSha") != resolved:
+            raise ValueError("Задача или SHA не совпадают с журналом")
+        last = journal.data["events"][-1]
+        if last.get("block") != "11" or not isinstance(last.get("result", {}).get("hosts"), list):
+            raise ValueError("В журнале нет непереданного результата discovery")
+        task = ensure_claimed_task(args.task_id)
+        hosts, artifact = last["result"]["hosts"], Path(last["result"]["evidence"])
+        record_hosts(args.task_id, task["engagementId"], hosts, artifact)
+        status, block = ("live", "13") if hosts else ("empty", "14")
+        journal.add("12", {"status": status, "count": len(hosts), "recovered": True})
+        journal.add(block, {"status": status, "hosts": hosts, "recovered": True})
+        journal.add("15", {"status": status, "vpn": "already-disconnected", "evidence": str(artifact)})
+        print(json.dumps({"status": status, "journal": str(journal.path), "sha": resolved, "tag": tag, "hosts": hosts, "recovered": True}, ensure_ascii=False))
+        return 0
     if args.resume:
         if args.dry_run or args.execute or not args.approve_discovery:
             parser.error("Возобновление требует только --resume и --approve-discovery")
@@ -305,7 +327,8 @@ def main():
         artifact = journal.path.with_suffix(".discovery.txt")
         hosts = discovery(snapshot["routes"], artifact)
         journal.add("11", {"status": "completed", "coverage": snapshot["routes"], "evidence": str(artifact), "hosts": hosts})
-        record_hosts(args.task_id, hosts, artifact)
+        task = ensure_claimed_task(args.task_id)
+        record_hosts(args.task_id, task["engagementId"], hosts, artifact)
         status, block = ("live", "13") if hosts else ("empty", "14")
         journal.add("12", {"status": status, "count": len(hosts)})
         journal.add(block, {"status": status, "hosts": hosts})
