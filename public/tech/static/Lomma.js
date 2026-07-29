@@ -7669,12 +7669,8 @@ function getAutoNumber(itemId) {
 function drawAutoNumber(render, texId, item) {
     var number = getAutoNumber(item.id)
     if (!number) return
-    var radius = 14
-    var x = item.x + item.w - radius - 4
-    var y = item.y - item.h + radius + 4
-    var format = { fillColor: "#e00018", lineColor: "#ffffff", lineThickness: 2, lineStyle: "solid", shadow: null }
-    render.drawShape(texId, "circle", x, y, [radius, radius], format)
-    render.drawText(texId, String(number), x - (number > 9 ? 7 : 4), y + 5, "#ffffff")
+    // Номер — простая метка над левым верхним углом: без фигуры и без рамки.
+    render.drawText(texId, String(number), item.x - item.w + 4, item.y - item.h - 3, "#dfead2")
 }
 
 function getIconCount(graph) {
