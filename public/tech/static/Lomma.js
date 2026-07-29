@@ -3624,7 +3624,7 @@ function buildMenuByType(node) {
         )
         pushSeparator(menu)
     }
-    if (node.type != "header" && node.type != "params" && window.drakonWorkflowChooseTarget) {
+    if ((node.type == "insertion" || node.type == "branch") && window.drakonWorkflowChooseTarget) {
         pushMenuItem(
             menu,
             "ПЕРЕЙТИ К СХЕМЕ…",
@@ -10425,8 +10425,8 @@ function mouseClick(x, y, button) {
     if (prim) {
         addTrace("found vi", [prim.id])
         if (prim.id) {
-            var teleportItem = module.storage.items[prim.id]
-            if (button === 0 && teleportItem && teleportItem.teleport && window.drakonWorkflowFollow) {
+            var teleportItem = module.storage.items[prim.itemId || prim.id]
+            if (button === 0 && teleportItem && (teleportItem.type == "insertion" || teleportItem.type == "branch") && teleportItem.teleport && window.drakonWorkflowFollow) {
                 if (window.drakonWorkflowFollow(teleportItem.teleport)) {
                     return { mustRedraw: false }
                 }
