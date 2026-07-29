@@ -10,12 +10,10 @@ const seedDir = path.join(root, "seed");
 const dataDir = process.env.DRAKON_DATA_DIR || path.join(root, "data");
 const statePath = path.join(dataDir, "state.json");
 const techStatePath = path.join(dataDir, "tech-state.json");
-const workflowDraftsPath = path.join(dataDir, "workflow-drafts.json");
 const port = Number(process.env.PORT || 13339);
 const mime = { ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".ico": "image/x-icon", ".js": "application/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png" };
 let state;
 let techState;
-let workflowDrafts;
 let writeQueue = Promise.resolve();
 
 async function makeInitialState() {
@@ -49,12 +47,6 @@ async function loadState() {
     techState = {};
     await saveTechState();
   }
-  try { workflowDrafts = JSON.parse(await fs.readFile(workflowDraftsPath, "utf8")); }
-  catch (error) {
-    if (error.code !== "ENOENT") throw error;
-    workflowDrafts = {};
-    await saveWorkflowDrafts();
-  }
 }
 
 function saveState() {
@@ -75,43 +67,10 @@ function saveTechState() {
   return writeQueue;
 }
 
-function saveWorkflowDrafts() {
-  writeQueue = writeQueue.then(async () => {
-    const temporary = `${workflowDraftsPath}.new`;
-    await fs.writeFile(temporary, JSON.stringify(workflowDrafts, null, 2) + "\n", { mode: 0o640 });
-    await fs.rename(temporary, workflowDraftsPath);
-  });
-  return writeQueue;
-}
-
 async function approvedWorkflow(name) {
   if (name !== "08-no-creds-siluet") throw Object.assign(new Error("Неизвестный workflow"), { code: "ENOENT" });
   const diagram = JSON.parse(await fs.readFile(path.join(root, "workflows", `${name}.drakon`), "utf8"));
-  const contract = JSON.parse(await fs.readFile(path.join(root, "workflows", `${name}.contract.json`), "utf8"));
-  return { diagram, contract, source: "approved" };
-}
-
-function validWorkflowPair(value) {
-  const items = value?.diagram?.items;
-  const operations = value?.contract?.operations;
-  if (!items || !operations || value.contract.workflow !== "08-no-creds-siluet") return false;
-  const forbidden = /credential|парол|port|порт|service|сервис|mitre/i;
-  if (value.contract?.policy?.scope !== "all-ppp0-routes") return false;
-  return Object.entries(items).every(([id, item]) =>
-    (!["action", "question"].includes(item.type) || operations[id]) && !forbidden.test(String(item.content || ""))
-  );
-}
-
-async function syncWorkflowDraftFromTech(change) {
-  if (change.op !== "set" || typeof change.value !== "string") return;
-  let diagram;
-  try { diagram = JSON.parse(change.value); } catch { return; }
-  if (diagram?.name !== "08-no-creds-siluet") return;
-  const current = workflowDrafts["08-no-creds-siluet"] || await approvedWorkflow("08-no-creds-siluet");
-  const candidate = { diagram, contract: current.contract };
-  if (!validWorkflowPair(candidate)) return;
-  workflowDrafts["08-no-creds-siluet"] = { ...candidate, source: "draft-from-tech", savedAt: new Date().toISOString() };
-  await saveWorkflowDrafts();
+  return { diagram, source: "approved" };
 }
 
 async function syncTechDiagram(diagram) {
@@ -177,19 +136,7 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "POST" && route === "/api/tech-storage") {
       const change = await readBody(request);
       await applyChange(techState, change, saveTechState);
-      await syncWorkflowDraftFromTech(change);
       return reply(response, 204, "");
-    }
-    if (request.method === "GET" && route === "/api/workflow/08-no-creds-siluet") {
-      return reply(response, 200, JSON.stringify(workflowDrafts["08-no-creds-siluet"] || await approvedWorkflow("08-no-creds-siluet")));
-    }
-    if (request.method === "PUT" && route === "/api/workflow/08-no-creds-siluet") {
-      const draft = await readBody(request);
-      if (!validWorkflowPair(draft)) return reply(response, 400, JSON.stringify({ error: "Черновик не покрывает все исполнимые блоки" }));
-      workflowDrafts["08-no-creds-siluet"] = { diagram: draft.diagram, contract: draft.contract, source: "draft", savedAt: new Date().toISOString() };
-      await syncTechDiagram(draft.diagram);
-      await saveWorkflowDrafts();
-      return reply(response, 200, JSON.stringify(workflowDrafts["08-no-creds-siluet"]));
     }
     if (request.method !== "GET" && request.method !== "HEAD") return reply(response, 405, "Метод не поддерживается", "text/plain; charset=utf-8");
     const relative = url.pathname.endsWith("/") ? `${url.pathname.slice(1)}index.html` : url.pathname.slice(1);

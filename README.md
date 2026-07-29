@@ -12,8 +12,8 @@
 - `drakon-web.service`, `drakon-web.nginx.conf` — служба и HTTPS-маршруты
   Nginx `/drakon/` и `/drakon-tech/`.
 - `seed-tech-project.js` — однократный импорт схем в проект `reglament`.
-- `workflows/` — единая утверждаемая пара `08-no-creds-siluet`: DRAKON-схема
-  и привязанный к её блокам машинный контракт.
+- `workflows/08-no-creds-siluet.drakon` — единственная утверждаемая схема:
+  в каждом блоке хранятся человеческие и исполнимые данные.
 - `worker/workflow_runner.py` — исполнитель workflow 08 с сухим прогоном и
   хеш-цепочкой журнала.
 
