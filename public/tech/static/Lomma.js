@@ -70,7 +70,6 @@ function Action_draw(render, item) {
         item
     )
     drawAutoNumber(render, texId, item)
-    drawTeleportMark(render, texId, item)
 }
 
 function Action_flow(render, item) {
@@ -7691,14 +7690,6 @@ function drawAutoNumber(render, texId, item) {
     render.drawText(texId, String(number), item.x - item.w + 4, item.y - item.h - 3, "#dfead2")
 }
 
-function drawTeleportMark(render, texId, item) {
-    var source = module.storage.items[item.id]
-    if (!source || !source.teleport) return
-    // Последний успешный выход не продолжает линию к «Конец». Метка показывает,
-    // что щелчок по этому выходу откроет следующую схему.
-    render.drawText(texId, "↗", item.x + item.w - 20, item.y - item.h + 4, "#e6fbff")
-}
-
 function getIconCount(graph) {
     var result = 0;
     return result;
@@ -10437,23 +10428,14 @@ function setTeleport(node) {
     target = window.drakonWorkflowChooseTarget(module.storage.items[node.itemId].teleport)
     if (!target) return
     edits = []
-    updateItem(edits, node.itemId, {teleport: target, one: null})
+    updateItem(edits, node.itemId, {teleport: target})
     editAndSave(edits)
 }
 
 function clearTeleport(node) {
     var edits = []
-    updateItem(edits, node.itemId, {teleport: null, one: getEndItemId()})
+    updateItem(edits, node.itemId, {teleport: null})
     editAndSave(edits)
-}
-
-function getEndItemId() {
-    var ids = Object.keys(module.storage.items)
-    for (var index = 0; index < ids.length; index++) {
-        var id = ids[index]
-        if (module.storage.items[id].type == "end") return id
-    }
-    return "1"
 }
 
 function moveBranchIdsLeft(branchId) {
