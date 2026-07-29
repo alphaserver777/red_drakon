@@ -13,7 +13,6 @@ const techStatePath = path.join(dataDir, "tech-state.json");
 const port = Number(process.env.PORT || 13339);
 const workflowDiagrams = {
   "08-no-creds-siluet": "d09",
-  "09-no-creds-full-siluet": "d10",
 };
 const mime = { ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".ico": "image/x-icon", ".js": "application/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png" };
 let state;
