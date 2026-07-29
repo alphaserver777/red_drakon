@@ -23,7 +23,6 @@ import uuid
 
 WORKFLOW = "08-no-creds-siluet"
 DIAGRAM_PATH = Path("workflows/08-no-creds-siluet.drakon")
-CONTRACT_PATH = Path("workflows/08-no-creds-siluet.contract.json")
 TERMINAL = {"1"}
 FORBIDDEN = ("credential", "парол", "port", "порт", "service", "сервис", "mitre")
 
@@ -48,18 +47,16 @@ def git_json(repo, sha, relative):
 
 def load_workflow(repo, sha=None):
     diagram = git_json(repo, sha, DIAGRAM_PATH) if sha else read_json(repo / DIAGRAM_PATH)
-    contract = git_json(repo, sha, CONTRACT_PATH) if sha else read_json(repo / CONTRACT_PATH)
-    validate(diagram, contract)
-    return diagram, contract
+    validate(diagram)
+    return diagram
 
 
-def validate(diagram, contract):
-    if diagram.get("type") != "drakon" or contract.get("workflow") != WORKFLOW:
-        raise ValueError("Неверная пара схемы и контракта")
+def validate(diagram):
+    if diagram.get("type") != "drakon" or diagram.get("name") != WORKFLOW:
+        raise ValueError("Неверная исполнимая схема")
     items = diagram.get("items")
-    operations = contract.get("operations")
-    if not isinstance(items, dict) or not isinstance(operations, dict):
-        raise ValueError("Нет блоков схемы или операций")
+    if not isinstance(items, dict):
+        raise ValueError("Нет блоков схемы")
     reachable, pending = set(), ["2"]
     while pending:
         item_id = pending.pop()
@@ -77,15 +74,14 @@ def validate(diagram, contract):
         text = item.get("content", "").lower()
         if any(token in text for token in FORBIDDEN):
             raise ValueError(f"Запрещённый этап в блоке {item_id}")
-        if item.get("type") in {"action", "question"} and item_id not in operations:
-            raise ValueError(f"Для блока {item_id} нет машинной операции")
-    for item_id, operation in operations.items():
-        if item_id not in items:
-            raise ValueError(f"Операция ссылается на отсутствующий блок {item_id}")
-        transitions = [operation[key] for key in ("next", "success", "failure") if operation.get(key)]
-        if not transitions or any(target not in items and target not in TERMINAL for target in transitions):
-            raise ValueError(f"Некорректный переход операции {item_id}")
-    if contract.get("policy", {}).get("scope") != "all-ppp0-routes":
+        if item.get("type") in {"action", "question"}:
+            agent = item.get("agent")
+            if not isinstance(agent, dict) or not agent.get("op") or not agent.get("executor"):
+                raise ValueError(f"Для блока {item_id} нет исполнимых данных")
+            expected = "|".join(str(item[edge]) for edge in ("one", "two") if item.get(edge))
+            if agent.get("next") != expected:
+                raise ValueError(f"Переходы блока {item_id} не совпадают с его исполнимыми данными")
+    if diagram.get("agentPolicy", {}).get("scope") != "all-ppp0-routes":
         raise ValueError("Первый опыт ограничен только маршрутами ppp0")
 
 
@@ -296,7 +292,7 @@ def main():
     if args.task_id <= 0:
         parser.error("task ID должен быть положительным")
     resolved = git_sha(args.repo, args.schema_ref, args.fetch)
-    _, contract = load_workflow(args.repo, resolved)
+    diagram = load_workflow(args.repo, resolved)
     tag = approved_tag(args.repo, resolved)
     if args.finalize:
         if args.dry_run or args.execute or args.resume or args.approve_discovery:
@@ -349,7 +345,7 @@ def main():
         return 0
     output = args.output or Path.home() / ".local/state/red_drakon/runs" / f"{int(time.time())}-{args.task_id}.json"
     journal = Journal(output, args.task_id, args.schema_ref, resolved, bool(args.dry_run))
-    journal.add("3", {"contract": digest(contract)})
+    journal.add("3", {"diagram": digest(diagram)})
     if args.dry_run:
         status, blocks = dry_result(args.dry_run)
         for block in blocks[1:]:

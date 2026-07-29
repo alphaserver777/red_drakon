@@ -13856,6 +13856,10 @@ function startEditText(nodeId) {
         y = node.y - node.h - 29
         setTextProc = function(text) {
             setNodeText(nodeId, text)
+            if (window.drakonAgentTake) {
+                var agent = window.drakonAgentTake(nodeId)
+                if (agent) module.storage.items[nodeId].agent = agent
+            }
         }
         cmOptions = undefined
         if (node.type == "header") {

@@ -76,6 +76,9 @@ function buildWindow(headerText, oldText, cmOptions) {
             oldText
         )
     }
+    if (window.drakonAgentDialog) {
+        window.drakonAgentDialog(headerText, main)
+    }
     var panel = make(main, "div")
     panel.style.height = "40px"
     var butts = make(panel, "div")
@@ -441,6 +444,7 @@ function onSave() {
             showError(message)
         } else {
             globs.callback(text)
+            if (window.drakonAgentSave) window.drakonAgentSave()
             if (globs.isAsync) {
                 
             } else {
@@ -449,6 +453,7 @@ function onSave() {
         }
     } else {
         globs.callback(text)
+        if (window.drakonAgentSave) window.drakonAgentSave()
         if (globs.isAsync) {
             
         } else {
