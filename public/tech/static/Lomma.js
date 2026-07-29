@@ -45,7 +45,8 @@ module.callbacks = {}
 function Action_draw(render, item) {
     var format, texId
     format = getFormatForIcon(
-        item.type
+        item.type,
+        item.id
     )
     texId = makeCustomTexture(
         render,
@@ -1446,7 +1447,7 @@ function Question_draw(render, item) {
     	item.w + 2,
     	item.h
     )
-    format = getFormatForIcon(item.type)
+    format = getFormatForIcon(item.type, item.id)
     render.drawShape(
     	texId,
     	"poly",
@@ -7627,7 +7628,7 @@ function getFormat(ids) {
     return {}
 }
 
-function getFormatForIcon(type) {
+function getFormatForIcon(type, itemId) {
     var format
     format = {}
     format.fillColor = Theme.icon(type, "iconback")
@@ -7635,6 +7636,14 @@ function getFormatForIcon(type) {
     format.lineThickness = Theme.icon(type, "thickness")
     format.lineStyle = Theme.icon(type, "style")
     format.shadow = Theme.icon(type, "shadow")
+    // Временная окраска выполнения: она не является свойством схемы и не
+    // сохраняется редактором. Её задаёт run-monitor.js по журналу воркёра.
+    var status = window.drakonWorkflowStatus && window.drakonWorkflowStatus[itemId]
+    if (status) {
+        format.fillColor = status.fill
+        format.lineColor = status.line
+        format.lineThickness = status.active ? 3 : 2
+    }
     return format
 }
 

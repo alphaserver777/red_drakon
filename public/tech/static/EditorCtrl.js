@@ -5545,5 +5545,6 @@ function EditorCtrl(window, document, elementId, userId) {
   this.searchNext = searchNext;
   this.searchPrev = searchPrev;
   this.redraw = redraw;
+  window.drakonRuntimeRedraw = redraw;
   this.restoreDiagramPosition = restoreDiagramPosition;
 }

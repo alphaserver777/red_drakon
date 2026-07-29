@@ -6,6 +6,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/root/drakon-web
 Environment=DRAKON_DATA_DIR=/var/lib/drakon-web
+EnvironmentFile=-/etc/drakon-web.env
 ExecStart=/usr/bin/node /root/drakon-web/server.js
 Restart=on-failure
 RestartSec=3

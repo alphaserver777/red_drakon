@@ -42,6 +42,18 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(journal.terminal_result()["status"], "live")
         output.unlink()
 
+    def test_executable_block_has_started_and_completed_events(self):
+        output = ROOT / ".test-run.json"
+        journal = RUNNER.Journal(output, 1, "HEAD", "abc", True)
+        journal.add("3", {"status": "ok"})
+        events = journal.data["events"]
+        self.assertEqual(events[-2]["block"], "3")
+        self.assertEqual(events[-2]["phase"], "started")
+        self.assertEqual(events[-1]["block"], "3")
+        self.assertNotIn("phase", events[-1])
+        self.assertEqual(RUNNER.Journal.open(output).data["events"][-1]["block"], "3")
+        output.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

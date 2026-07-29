@@ -122,12 +122,25 @@ function reply(response, status, body, type = "application/json; charset=utf-8")
   response.end(body);
 }
 
+async function workflowRuns(requestUrl) {
+  const base = (process.env.OPS_PANEL_URL || "").replace(/\/$/, "");
+  const token = process.env.DRAKON_VIEW_TOKEN || "";
+  if (!/^https:\/\//.test(base) || !token) throw new Error("Наблюдение DRAKON не настроено");
+  const query = requestUrl.searchParams.toString();
+  const response = await fetch(`${base}/api/workflow-runs${query ? `?${query}` : ""}`, {
+    headers: { authorization: `Bearer ${token}` }, cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`Панель не выдала журнал: HTTP ${response.status}`);
+  return await response.text();
+}
+
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://localhost");
     const route = url.pathname.startsWith("/tech/api/") ? url.pathname.slice(5) : url.pathname.startsWith("/workflow/api/") ? url.pathname.slice(9) : url.pathname;
     if (request.method === "GET" && route === "/api/state") return reply(response, 200, JSON.stringify(state));
     if (request.method === "GET" && route === "/api/tech-state") return reply(response, 200, JSON.stringify(techState));
+    if (request.method === "GET" && route === "/api/workflow-runs") return reply(response, 200, await workflowRuns(url));
     if (request.method === "POST" && route === "/api/storage") {
       const change = await readBody(request);
       await applyChange(state, change, saveState);

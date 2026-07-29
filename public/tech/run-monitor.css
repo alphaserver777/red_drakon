@@ -1,0 +1,10 @@
+#workflow-monitor { position: fixed; z-index: 1000; right: 12px; bottom: 12px; width: 360px; padding: 10px; display: grid; gap: 7px; color: #dce9f5; background: #182633; border: 1px solid #4a789a; font: 12px Arial, sans-serif; box-shadow: 0 3px 18px #000a; }
+#workflow-monitor select, #workflow-monitor button { min-height: 28px; color: #eaf5ff; background: #243849; border: 1px solid #527b9d; border-radius: 3px; }
+.workflow-monitor-state { color: #9fc5df; line-height: 1.35; }
+.workflow-monitor-steps { display: flex; flex-wrap: wrap; gap: 4px; max-height: 150px; overflow: auto; }
+.workflow-step { padding: 3px 6px; }
+.workflow-step.running { border-color: #5bd4ff !important; background: #115e9c !important; }
+.workflow-step.checkpoint { border-color: #7cecff !important; background: #176b83 !important; }
+.workflow-step.completed { border-color: #63e6a5 !important; background: #176b3a !important; }
+.workflow-step.blocked { border-color: #ffd54f !important; background: #7b5c00 !important; }
+.workflow-step.failed { border-color: #ff8392 !important; background: #8d2633 !important; }

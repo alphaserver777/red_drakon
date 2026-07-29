@@ -89,12 +89,45 @@ def validate(diagram):
         raise ValueError("Схема должна быть ограничена VPN и discovery")
 
 
+class EventDelivery:
+    """Неблокирующая доставка безопасной проекции журнала в операторскую панель."""
+    def __init__(self, journal):
+        self.journal = journal
+        self.outbox = journal.path.parent / "outbox"
+
+    def enqueue(self, event):
+        self.outbox.mkdir(mode=0o700, parents=True, exist_ok=True)
+        payload = {key: self.journal.data[key] for key in ("runId", "workflow", "taskId", "schemaRef", "resolvedSha", "dryRun")}
+        payload["event"] = event
+        path = self.outbox / f"{event['at']:010d}-{event['hash']}.json"
+        path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
+    def flush(self):
+        base_url = os.environ.get("OPS_PANEL_URL", "").rstrip("/")
+        token = os.environ.get("AGENT_API_TOKEN", "")
+        if not base_url or not token:
+            return
+        for path in sorted(self.outbox.glob("*.json")):
+            try:
+                payload = path.read_bytes()
+                task_id = json.loads(payload).get("taskId")
+                request = Request(f"{base_url}/api/agent-tasks/{task_id}/workflow-events", data=payload, method="POST",
+                                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+                with urlopen(request, timeout=10) as response:
+                    if response.status not in (200, 201):
+                        return
+                path.unlink(missing_ok=True)
+            except Exception:
+                return
+
+
 class Journal:
     def __init__(self, output, task_id, schema_ref, resolved_sha, dry_run):
         self.path = output
         self.data = {"runId": str(uuid.uuid4()), "workflow": WORKFLOW, "taskId": task_id,
                      "schemaRef": schema_ref, "resolvedSha": resolved_sha, "dryRun": dry_run,
                      "events": []}
+        self.delivery = EventDelivery(self)
         self.add("run-created", {"pid": os.getpid()})
 
     @classmethod
@@ -102,6 +135,7 @@ class Journal:
         instance = cls.__new__(cls)
         instance.path = path
         instance.data = read_json(path)
+        instance.delivery = EventDelivery(instance)
         events = instance.data.get("events")
         if not isinstance(events, list) or not events:
             raise ValueError("Журнал не содержит событий")
@@ -114,15 +148,43 @@ class Journal:
             previous = stored
         return instance
 
-    def add(self, block, result):
+    def add(self, block, result, phase="completed"):
+        # Для всех исполнимых блоков журнал фиксирует начало и результат.
+        # Старые записи без phase остаются корректными и читаются как completed.
+        if phase in {"completed", "failed"} and str(block).isdigit():
+            last = self.data["events"][-1] if self.data["events"] else {}
+            if last.get("block") != str(block) or last.get("phase") != "started":
+                self._append(block, {"status": "running"}, "started")
+        self._append(block, result, phase)
+
+    def _append(self, block, result, phase):
         previous = self.data["events"][-1]["hash"] if self.data["events"] else ""
-        event = {"at": int(time.time()), "block": block, "result": result, "previous": previous}
+        event = {"at": int(time.time()), "block": str(block), "result": result, "previous": previous}
+        if phase != "completed":
+            event["phase"] = phase
         event["hash"] = digest(event)
         self.data["events"].append(event)
         self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         temporary = self.path.with_suffix(".new")
         temporary.write_text(json.dumps(self.data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         os.replace(temporary, self.path)
+        self.delivery.enqueue(event)
+        self.delivery.flush()
+
+    def start(self, block):
+        self._append(block, {"status": "running"}, "started")
+
+    def set_target_ip(self, target_ip):
+        self.data["targetIp"] = target_ip
+        temporary = self.path.with_suffix(".new")
+        temporary.write_text(json.dumps(self.data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(temporary, self.path)
+
+    def sync(self):
+        for event in self.data["events"]:
+            self.delivery.enqueue(event)
+        self.delivery.flush()
+        return len(list(self.delivery.outbox.glob("*.json")))
 
     def terminal_result(self):
         """Итог существует только после финального блока схемы."""
@@ -203,7 +265,7 @@ def vpn_up(task_id):
         subprocess.run([str(script), "up"], env=environment, text=True, capture_output=True, check=True)
     finally:
         config.unlink(missing_ok=True)
-    return {"taskId": result.get("taskId"), "engagementId": result.get("engagementId"), "status": "vpn-up"}
+    return {"taskId": result.get("taskId"), "engagementId": result.get("engagementId"), "targetIp": target["host"], "status": "vpn-up"}
 
 
 def vpn_down():
@@ -302,12 +364,23 @@ def main():
     parser.add_argument("--resume", type=Path, help="Продолжить журнал из before-discovery")
     parser.add_argument("--approve-discovery", action="store_true", help="Явно разрешить discovery при --resume")
     parser.add_argument("--finalize", type=Path, help="Передать в панель сохранённый результат discovery после сбоя")
+    parser.add_argument("--sync-journal", type=Path, help="Передать в панель ранее сохранённый журнал без сетевых действий")
     args = parser.parse_args()
     if args.task_id <= 0:
         parser.error("task ID должен быть положительным")
     resolved = git_sha(args.repo, args.schema_ref, args.fetch)
     diagram = load_workflow(args.repo, resolved)
     tag = approved_tag(args.repo, resolved)
+    if args.sync_journal:
+        if args.dry_run or args.execute or args.resume or args.approve_discovery or args.finalize:
+            parser.error("Синхронизация журнала не совмещается с другими режимами")
+        journal = Journal.open(args.sync_journal)
+        if journal.data.get("taskId") != args.task_id or journal.data.get("resolvedSha") != resolved:
+            raise ValueError("Задача или SHA не совпадают с журналом")
+        pending = journal.sync()
+        print(json.dumps({"status": "synced" if not pending else "pending-delivery", "journal": str(journal.path),
+                          "pending": pending, "sha": resolved, "tag": tag}, ensure_ascii=False))
+        return 0 if not pending else 2
     if args.finalize:
         if args.dry_run or args.execute or args.resume or args.approve_discovery:
             parser.error("Финализация не совмещается с другими режимами")
@@ -351,7 +424,7 @@ def main():
             finish = {"status": status, "vpn": "disconnected", "evidence": str(artifact)}
         except Exception as error:
             finish = {"status": "error", "vpn": "disconnect-failed", "error": str(error), "evidence": str(artifact)}
-        journal.add("15", finish)
+        journal.add("15", finish, "failed" if finish["status"] == "error" else "completed")
         if finish["status"] == "error":
             print(json.dumps({"status": "error", "journal": str(journal.path), "sha": resolved, "tag": tag}, ensure_ascii=False))
             return 2
@@ -375,14 +448,16 @@ def main():
     journal.add("4", ensure_claimed_task(args.task_id))
     vpn_connected = False
     try:
-        journal.add("5", vpn_up(args.task_id))
+        vpn = vpn_up(args.task_id)
+        journal.set_target_ip(vpn["targetIp"])
+        journal.add("5", vpn)
         vpn_connected = True
         journal.add("6", {"status": "ppp0-present"})
         snapshot = route_snapshot()
         journal.add("7", snapshot)
         journal.add("8", {"status": "routes-valid", "routes": snapshot["routes"]})
     except Exception as error:
-        journal.add("18", {"status": "blocked", "error": str(error)})
+        journal.add("18", {"status": "blocked", "error": str(error)}, "failed")
         if vpn_connected:
             try:
                 vpn_down()
