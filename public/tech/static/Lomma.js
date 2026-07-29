@@ -7664,14 +7664,6 @@ function getFormatForIcon(type, itemId) {
         format.lineColor = status.line
         format.lineThickness = status.active ? 3 : 2
     }
-    // Переход в другую схему — только навигационная метка. Сама схема и её
-    // журнал не меняются; синий цвет отличает такой блок от обычного действия.
-    var item = module.storage.items[itemId]
-    if (item && item.teleport && !status) {
-        format.fillColor = "#155f91"
-        format.lineColor = "#7cecff"
-        format.lineThickness = 3
-    }
     return format
 }
 
