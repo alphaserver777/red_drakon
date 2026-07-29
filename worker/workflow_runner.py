@@ -21,9 +21,9 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 import uuid
 
-WORKFLOW = "08-vpn-discovery"
-DIAGRAM_PATH = Path("workflows/08-vpn-discovery.drakon")
-CONTRACT_PATH = Path("workflows/08-vpn-discovery.contract.json")
+WORKFLOW = "08-no-creds-siluet"
+DIAGRAM_PATH = Path("workflows/08-no-creds-siluet.drakon")
+CONTRACT_PATH = Path("workflows/08-no-creds-siluet.contract.json")
 TERMINAL = {"1"}
 FORBIDDEN = ("credential", "парол", "port", "порт", "service", "сервис", "mitre")
 
@@ -134,10 +134,10 @@ def git_sha(repo, ref, fetch):
 
 def approved_tag(repo, sha):
     tags = subprocess.check_output(
-        ["git", "-C", str(repo), "tag", "--points-at", sha, "workflow/08-vpn-discovery/v*"], text=True
+        ["git", "-C", str(repo), "tag", "--points-at", sha, "workflow/08-no-creds-siluet/v*"], text=True
     ).splitlines()
     if not tags:
-        raise ValueError("SHA не утверждён тегом workflow/08-vpn-discovery/vN")
+        raise ValueError("SHA не утверждён тегом workflow/08-no-creds-siluet/vN")
     return sorted(tags)[-1]
 
 

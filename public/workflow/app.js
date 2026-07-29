@@ -31,7 +31,7 @@ function render() {
     const key = field.dataset.key; op[key] = ['inputs','evidence'].includes(key) ? field.value.split(',').map(v => v.trim()).filter(Boolean) : field.value;
   });
 }
-async function load() { const response = await api('workflow/08-vpn-discovery'); data = await response.json(); render(); }
-document.querySelector('#save').onclick = async () => { const response = await api('workflow/08-vpn-discovery', {method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(data)}); status.textContent = response.ok ? 'Черновик сохранён' : `Ошибка: ${(await response.json()).error}`; };
-document.querySelector('#export').onclick = () => { const blob = new Blob([JSON.stringify({diagram:data.diagram,contract:data.contract},null,2)],{type:'application/json'}); const link = Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:'08-vpn-discovery.bundle.json'}); link.click(); URL.revokeObjectURL(link.href); status.textContent = 'Набор скачан: закоммитьте и пометьте тегом вручную'; };
+async function load() { const response = await api('workflow/08-no-creds-siluet'); data = await response.json(); render(); }
+document.querySelector('#save').onclick = async () => { const response = await api('workflow/08-no-creds-siluet', {method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(data)}); status.textContent = response.ok ? 'Черновик сохранён в DRAKON Tech и карточках агента' : `Ошибка: ${(await response.json()).error}`; };
+document.querySelector('#export').onclick = () => { const blob = new Blob([JSON.stringify({diagram:data.diagram,contract:data.contract},null,2)],{type:'application/json'}); const link = Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:'08-no-creds-siluet.bundle.json'}); link.click(); URL.revokeObjectURL(link.href); status.textContent = 'Набор скачан: это точное содержимое, которое сможет прочитать агент после Git-тега'; };
 load().catch(error => status.textContent = `Ошибка загрузки: ${error.message}`);

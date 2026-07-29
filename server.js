@@ -85,7 +85,7 @@ function saveWorkflowDrafts() {
 }
 
 async function approvedWorkflow(name) {
-  if (name !== "08-vpn-discovery") throw Object.assign(new Error("Неизвестный workflow"), { code: "ENOENT" });
+  if (name !== "08-no-creds-siluet") throw Object.assign(new Error("Неизвестный workflow"), { code: "ENOENT" });
   const diagram = JSON.parse(await fs.readFile(path.join(root, "workflows", `${name}.drakon`), "utf8"));
   const contract = JSON.parse(await fs.readFile(path.join(root, "workflows", `${name}.contract.json`), "utf8"));
   return { diagram, contract, source: "approved" };
@@ -94,12 +94,34 @@ async function approvedWorkflow(name) {
 function validWorkflowPair(value) {
   const items = value?.diagram?.items;
   const operations = value?.contract?.operations;
-  if (!items || !operations || value.contract.workflow !== "08-vpn-discovery") return false;
+  if (!items || !operations || value.contract.workflow !== "08-no-creds-siluet") return false;
   const forbidden = /credential|парол|port|порт|service|сервис|mitre/i;
   if (value.contract?.policy?.scope !== "all-ppp0-routes") return false;
   return Object.entries(items).every(([id, item]) =>
     (!["action", "question"].includes(item.type) || operations[id]) && !forbidden.test(String(item.content || ""))
   );
+}
+
+async function syncWorkflowDraftFromTech(change) {
+  if (change.op !== "set" || typeof change.value !== "string") return;
+  let diagram;
+  try { diagram = JSON.parse(change.value); } catch { return; }
+  if (diagram?.name !== "08-no-creds-siluet") return;
+  const current = workflowDrafts["08-no-creds-siluet"] || await approvedWorkflow("08-no-creds-siluet");
+  const candidate = { diagram, contract: current.contract };
+  if (!validWorkflowPair(candidate)) return;
+  workflowDrafts["08-no-creds-siluet"] = { ...candidate, source: "draft-from-tech", savedAt: new Date().toISOString() };
+  await saveWorkflowDrafts();
+}
+
+async function syncTechDiagram(diagram) {
+  for (const [key, value] of Object.entries(techState)) {
+    try {
+      const candidate = JSON.parse(value);
+      if (candidate?.name === "08-no-creds-siluet") techState[key] = JSON.stringify(diagram);
+    } catch { /* не схема */ }
+  }
+  await saveTechState();
 }
 
 async function applyChange(target, change, save) {
@@ -143,17 +165,19 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "POST" && route === "/api/tech-storage") {
       const change = await readBody(request);
       await applyChange(techState, change, saveTechState);
+      await syncWorkflowDraftFromTech(change);
       return reply(response, 204, "");
     }
-    if (request.method === "GET" && route === "/api/workflow/08-vpn-discovery") {
-      return reply(response, 200, JSON.stringify(workflowDrafts["08-vpn-discovery"] || await approvedWorkflow("08-vpn-discovery")));
+    if (request.method === "GET" && route === "/api/workflow/08-no-creds-siluet") {
+      return reply(response, 200, JSON.stringify(workflowDrafts["08-no-creds-siluet"] || await approvedWorkflow("08-no-creds-siluet")));
     }
-    if (request.method === "PUT" && route === "/api/workflow/08-vpn-discovery") {
+    if (request.method === "PUT" && route === "/api/workflow/08-no-creds-siluet") {
       const draft = await readBody(request);
       if (!validWorkflowPair(draft)) return reply(response, 400, JSON.stringify({ error: "Черновик не покрывает все исполнимые блоки" }));
-      workflowDrafts["08-vpn-discovery"] = { diagram: draft.diagram, contract: draft.contract, source: "draft", savedAt: new Date().toISOString() };
+      workflowDrafts["08-no-creds-siluet"] = { diagram: draft.diagram, contract: draft.contract, source: "draft", savedAt: new Date().toISOString() };
+      await syncTechDiagram(draft.diagram);
       await saveWorkflowDrafts();
-      return reply(response, 200, JSON.stringify(workflowDrafts["08-vpn-discovery"]));
+      return reply(response, 200, JSON.stringify(workflowDrafts["08-no-creds-siluet"]));
     }
     if (request.method !== "GET" && request.method !== "HEAD") return reply(response, 405, "Метод не поддерживается", "text/plain; charset=utf-8");
     const relative = url.pathname.endsWith("/") ? `${url.pathname.slice(1)}index.html` : url.pathname.slice(1);
@@ -167,4 +191,8 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-loadState().then(() => server.listen(port, "127.0.0.1", () => console.log(`DRAKON: http://127.0.0.1:${port}`))).catch((error) => { console.error(error); process.exitCode = 1; });
+loadState().then(async () => {
+  const approved = await approvedWorkflow("08-no-creds-siluet");
+  await syncTechDiagram(approved.diagram);
+  server.listen(port, "127.0.0.1", () => console.log(`DRAKON: http://127.0.0.1:${port}`));
+}).catch((error) => { console.error(error); process.exitCode = 1; });

@@ -1,6 +1,6 @@
 {
-  "workflow": "08-vpn-discovery",
-  "diagram": "workflows/08-vpn-discovery.drakon",
+  "workflow": "08-no-creds-siluet",
+  "diagram": "workflows/08-no-creds-siluet.drakon",
   "version": 1,
   "policy": {
     "credentials": "forbidden",

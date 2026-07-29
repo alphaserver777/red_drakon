@@ -12,7 +12,7 @@ SPEC.loader.exec_module(RUNNER)
 class WorkflowTests(unittest.TestCase):
     def test_contract_validates(self):
         diagram, contract = RUNNER.load_workflow(ROOT)
-        self.assertEqual(contract["workflow"], "08-vpn-discovery")
+        self.assertEqual(contract["workflow"], "08-no-creds-siluet")
         self.assertEqual(diagram["items"]["11"]["type"], "action")
 
     def test_dry_paths_are_complete(self):
