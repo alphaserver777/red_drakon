@@ -47,7 +47,7 @@
         save.textContent = "Выбрать";
         for (const button of [cancel, save]) button.style.cssText = "float:right;margin-left:8px;padding:8px 14px";
         cancel.onclick = () => cover.remove();
-        save.onclick = () => { const target = resolve(select.value); cover.remove(); onChosen(target); };
+        save.onclick = () => { const target = resolve(select.value); cover.remove(); onChosen(target && target.id); };
         box.append(title, select, cancel, save);
         cover.appendChild(box);
         document.body.appendChild(cover);

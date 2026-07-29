@@ -81,15 +81,7 @@ function Action_flow(render, item) {
 }
 
 function Address_draw(render, item) {
-    var format, pos, source, texId
-    source = module.storage.items[item.itemId]
-    if (source && source.teleport) {
-        format = getFormatForIcon("end")
-        texId = makeCustomTexture(render, item.x, item.y, item.w, item.h)
-        render.drawShape(texId, "beginend", item.x, item.y, [item.w, item.h], format)
-        drawCenterTextInRect(render, texId, item.tb, item)
-        return
-    }
+    var format, pos, texId
     format = getFormatForIcon(
         item.type
     )
@@ -6119,12 +6111,6 @@ function drawCenterTextInRect(render, texId, tb, box) {
 
 function drawEdge(render, edge) {
     var format, h, w, x1, x2, y1, y2
-    // У телепорта видим только входящую линию. Его служебная связь с Exit
-    // нужна раскладчику DRAKON, но не должна выглядеть продолжением процесса.
-    if (edge.head && edge.head.itemId) {
-        var source = module.storage.items[edge.head.itemId]
-        if (source && source.teleport) return
-    }
     x1 = getX(edge.head)
     y1 = getY(edge.head)
     x2 = getX(edge.tail)
@@ -10445,9 +10431,7 @@ function setTeleport(node) {
         var edits
         if (!target) return
         edits = []
-        var fields = {teleport: target.id}
-        if (item.type == "branch") fields.content = "↗ " + target.name
-        updateItem(edits, itemId, fields)
+        updateItem(edits, itemId, {teleport: target})
         editAndSave(edits)
     })
 }
