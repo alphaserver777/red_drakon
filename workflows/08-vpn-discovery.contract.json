@@ -13,7 +13,7 @@
   "operations": {
     "3": { "kind": "preflight", "executor": "runner", "inputs": ["taskId", "schemaRef"], "evidence": ["gitSha", "runManifest"], "next": "4" },
     "4": { "kind": "decision", "executor": "runner", "success": "5", "failure": "16" },
-    "5": { "kind": "vpn-up", "executor": "runner", "command": "pc_api.py vpn-up <taskId>", "evidence": ["vpnResult"], "next": "6" },
+    "5": { "kind": "vpn-up", "executor": "runner", "command": "panel vpn-target → vpn-connect.sh up", "evidence": ["vpnResult"], "next": "6" },
     "6": { "kind": "decision", "executor": "runner", "success": "7", "failure": "17" },
     "7": { "kind": "route-check", "executor": "runner", "inputs": ["ppp0"], "evidence": ["ppp0Routes", "controlRoute"], "next": "8" },
     "8": { "kind": "decision", "executor": "runner", "success": "9", "failure": "18" },

@@ -15,7 +15,10 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import time
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 import uuid
 
 WORKFLOW = "08-vpn-discovery"
@@ -153,6 +156,49 @@ def route_snapshot():
     return {"routes": networks, "controlRoute": control}
 
 
+def vpn_up(task_id):
+    """Получить цель задачи без вывода секрета и запустить штатный wrapper."""
+    if os.geteuid() != 0:
+        raise PermissionError("VPN-запуск требует root")
+    base_url = os.environ.get("OPS_PANEL_URL", "").rstrip("/")
+    token = os.environ.get("AGENT_API_TOKEN", "")
+    parsed = urlparse(base_url)
+    if parsed.scheme != "https" or not parsed.netloc or not token:
+        raise ValueError("Нужны OPS_PANEL_URL (HTTPS) и AGENT_API_TOKEN")
+    request = Request(f"{base_url}/api/agent-tasks/{task_id}/vpn-target", method="POST",
+                      headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    with urlopen(request, timeout=30) as response:
+        result = json.loads(response.read().decode() or "{}")
+    target = result.get("vpn") if isinstance(result, dict) else None
+    if not isinstance(target, dict) or not all(target.get(key) for key in ("host", "port", "username", "password")):
+        raise RuntimeError("Панель вернула неполную VPN-цель")
+    if any("\n" in str(target[key]) or "\r" in str(target[key]) for key in ("host", "username", "password")):
+        raise RuntimeError("Панель вернула недопустимые VPN-данные")
+    script = Path("/root/agent_api/vpn-connect.sh")
+    if not script.is_file():
+        raise FileNotFoundError("Не найден /root/agent_api/vpn-connect.sh")
+    runtime = Path("/run/agent-api-vpn")
+    runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", dir=runtime, prefix="workflow-", suffix=".env", delete=False) as stream:
+        config = Path(stream.name)
+        os.chmod(config, 0o600)
+        for key, value in (("VPN_HOST", target["host"]), ("VPN_PORT", target["port"]),
+                           ("VPN_USERNAME", target["username"]), ("VPN_PASSWORD", target["password"])):
+            stream.write(f"{key}={value}\n")
+    try:
+        environment = {"PATH": os.environ.get("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"), "VPN_ENV": str(config)}
+        subprocess.run([str(script), "up"], env=environment, text=True, capture_output=True, check=True)
+    finally:
+        config.unlink(missing_ok=True)
+    return {"taskId": result.get("taskId"), "engagementId": result.get("engagementId"), "status": "vpn-up"}
+
+
+def vpn_down():
+    script = Path("/root/agent_api/vpn-connect.sh")
+    if script.is_file():
+        subprocess.run([str(script), "down"], text=True, capture_output=True, check=True)
+
+
 def discovery(routes, artifact):
     """Единственное активное действие: host discovery в разрешённых CIDR."""
     reports, live = [], set()
@@ -236,7 +282,15 @@ def main():
         status, block = ("live", "13") if hosts else ("empty", "14")
         journal.add("12", {"status": status, "count": len(hosts)})
         journal.add(block, {"status": status, "hosts": hosts})
-        journal.add("15", {"status": status, "evidence": str(artifact)})
+        try:
+            vpn_down()
+            finish = {"status": status, "vpn": "disconnected", "evidence": str(artifact)}
+        except Exception as error:
+            finish = {"status": "error", "vpn": "disconnect-failed", "error": str(error), "evidence": str(artifact)}
+        journal.add("15", finish)
+        if finish["status"] == "error":
+            print(json.dumps({"status": "error", "journal": str(journal.path), "sha": resolved, "tag": tag}, ensure_ascii=False))
+            return 2
         print(json.dumps({"status": status, "journal": str(journal.path), "sha": resolved, "tag": tag,
                           "coverage": snapshot["routes"], "hosts": hosts}, ensure_ascii=False))
         return 0
@@ -253,9 +307,7 @@ def main():
         journal.add("4", {"status": "blocked", "reason": "Нужен --execute; сетевые действия не запускались"})
         print(json.dumps({"status": "blocked", "journal": str(output), "sha": resolved, "tag": tag}, ensure_ascii=False))
         return 2
-    pc_api = Path("/root/agent_api/pc_api.py")
-    subprocess.run([str(pc_api), "vpn-up", str(args.task_id)], check=True)
-    journal.add("5", {"status": "vpn-up"})
+    journal.add("5", vpn_up(args.task_id))
     journal.add("6", {"status": "ppp0-present"})
     snapshot = route_snapshot()
     journal.add("7", snapshot)
