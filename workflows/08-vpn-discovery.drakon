@@ -1,0 +1,27 @@
+{
+  "type": "drakon",
+  "name": "08 — VPN и обнаружение живых хостов",
+  "params": "Исполнимый эксперимент без учётных данных, сервисов и портов",
+  "items": {
+    "1": { "type": "end" },
+    "2": { "type": "branch", "branchId": 1, "one": "3", "content": "Эксперимент 08" },
+    "3": { "type": "action", "one": "4", "content": "Зафиксировать задачу, SHA схемы и согласованную границу ppp0" },
+    "4": { "type": "question", "one": "5", "two": "16", "flag1": 1, "content": "Есть task ID и утверждённый Git SHA?" },
+    "5": { "type": "action", "one": "6", "content": "Поднять VPN только через pc_api.py vpn-up" },
+    "6": { "type": "question", "one": "7", "two": "17", "flag1": 1, "content": "VPN подключён и ppp0 существует?" },
+    "7": { "type": "action", "one": "8", "content": "Сохранить маршруты ppp0 и проверить управляющий маршрут Kali" },
+    "8": { "type": "question", "one": "9", "two": "18", "flag1": 1, "content": "Граница ppp0 корректна, а supernet не требует остановки?" },
+    "9": { "type": "action", "one": "10", "content": "КОНТРОЛЬНАЯ ТОЧКА: ждать разрешения оператора перед discovery" },
+    "10": { "type": "question", "one": "11", "two": "19", "flag1": 1, "content": "Оператор разрешил discovery этой версии?" },
+    "11": { "type": "action", "one": "12", "content": "Найти живые хосты только в маршрутах ppp0" },
+    "12": { "type": "question", "one": "13", "two": "14", "flag1": 1, "content": "Найдены живые хосты?" },
+    "13": { "type": "action", "one": "15", "content": "status=live: сохранить hosts, coverage и доказательство" },
+    "14": { "type": "action", "one": "15", "content": "status=empty: сохранить coverage и отсутствие живых хостов" },
+    "15": { "type": "action", "one": "1", "content": "Завершить эксперимент, отключить VPN и передать хешированный журнал" },
+    "16": { "type": "action", "one": "1", "content": "status=blocked: отсутствует task ID или утверждённый SHA; сетевые действия запрещены" },
+    "17": { "type": "action", "one": "1", "content": "status=dead: VPN/ppp0 недоступен; сохранить доказательство" },
+    "18": { "type": "action", "one": "1", "content": "status=blocked: маршрут некорректен или требует отдельного разрешения" },
+    "19": { "type": "action", "one": "15", "content": "status=blocked: discovery не разрешён; отключить VPN и передать журнал" }
+  },
+  "keywords": { "function": false, "machine": false, "async": false, "export": false, "algoprop": false, "lazy": false }
+}

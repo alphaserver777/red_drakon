@@ -10,10 +10,12 @@ const seedDir = path.join(root, "seed");
 const dataDir = process.env.DRAKON_DATA_DIR || path.join(root, "data");
 const statePath = path.join(dataDir, "state.json");
 const techStatePath = path.join(dataDir, "tech-state.json");
+const workflowDraftsPath = path.join(dataDir, "workflow-drafts.json");
 const port = Number(process.env.PORT || 13339);
 const mime = { ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".ico": "image/x-icon", ".js": "application/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png" };
 let state;
 let techState;
+let workflowDrafts;
 let writeQueue = Promise.resolve();
 
 async function makeInitialState() {
@@ -47,6 +49,12 @@ async function loadState() {
     techState = {};
     await saveTechState();
   }
+  try { workflowDrafts = JSON.parse(await fs.readFile(workflowDraftsPath, "utf8")); }
+  catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    workflowDrafts = {};
+    await saveWorkflowDrafts();
+  }
 }
 
 function saveState() {
@@ -65,6 +73,29 @@ function saveTechState() {
     await fs.rename(temporary, techStatePath);
   });
   return writeQueue;
+}
+
+function saveWorkflowDrafts() {
+  writeQueue = writeQueue.then(async () => {
+    const temporary = `${workflowDraftsPath}.new`;
+    await fs.writeFile(temporary, JSON.stringify(workflowDrafts, null, 2) + "\n", { mode: 0o640 });
+    await fs.rename(temporary, workflowDraftsPath);
+  });
+  return writeQueue;
+}
+
+async function approvedWorkflow(name) {
+  if (name !== "08-vpn-discovery") throw Object.assign(new Error("Неизвестный workflow"), { code: "ENOENT" });
+  const diagram = JSON.parse(await fs.readFile(path.join(root, "workflows", `${name}.drakon`), "utf8"));
+  const contract = JSON.parse(await fs.readFile(path.join(root, "workflows", `${name}.contract.json`), "utf8"));
+  return { diagram, contract, source: "approved" };
+}
+
+function validWorkflowPair(value) {
+  const items = value?.diagram?.items;
+  const operations = value?.contract?.operations;
+  if (!items || !operations || value.contract.workflow !== "08-vpn-discovery") return false;
+  return Object.entries(items).every(([id, item]) => !["action", "question"].includes(item.type) || operations[id]);
 }
 
 async function applyChange(target, change, save) {
@@ -97,7 +128,7 @@ function reply(response, status, body, type = "application/json; charset=utf-8")
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://localhost");
-    const route = url.pathname.startsWith("/tech/api/") ? url.pathname.slice(5) : url.pathname;
+    const route = url.pathname.startsWith("/tech/api/") ? url.pathname.slice(5) : url.pathname.startsWith("/workflow/api/") ? url.pathname.slice(9) : url.pathname;
     if (request.method === "GET" && route === "/api/state") return reply(response, 200, JSON.stringify(state));
     if (request.method === "GET" && route === "/api/tech-state") return reply(response, 200, JSON.stringify(techState));
     if (request.method === "POST" && route === "/api/storage") {
@@ -109,6 +140,16 @@ const server = http.createServer(async (request, response) => {
       const change = await readBody(request);
       await applyChange(techState, change, saveTechState);
       return reply(response, 204, "");
+    }
+    if (request.method === "GET" && route === "/api/workflow/08-vpn-discovery") {
+      return reply(response, 200, JSON.stringify(workflowDrafts["08-vpn-discovery"] || await approvedWorkflow("08-vpn-discovery")));
+    }
+    if (request.method === "PUT" && route === "/api/workflow/08-vpn-discovery") {
+      const draft = await readBody(request);
+      if (!validWorkflowPair(draft)) return reply(response, 400, JSON.stringify({ error: "Черновик не покрывает все исполнимые блоки" }));
+      workflowDrafts["08-vpn-discovery"] = { diagram: draft.diagram, contract: draft.contract, source: "draft", savedAt: new Date().toISOString() };
+      await saveWorkflowDrafts();
+      return reply(response, 200, JSON.stringify(workflowDrafts["08-vpn-discovery"]));
     }
     if (request.method !== "GET" && request.method !== "HEAD") return reply(response, 405, "Метод не поддерживается", "text/plain; charset=utf-8");
     const relative = url.pathname.endsWith("/") ? `${url.pathname.slice(1)}index.html` : url.pathname.slice(1);
