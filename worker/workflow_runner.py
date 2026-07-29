@@ -251,7 +251,10 @@ def record_hosts(task_id, engagement_id, hosts, artifact):
     pc_api = Path("/root/agent_api/pc_api.py")
     if not pc_api.is_file():
         raise FileNotFoundError("Не найден /root/agent_api/pc_api.py")
-    environment = os.environ | {"OPENCODE_ENGAGEMENT_ID": str(engagement_id)}
+    environment = os.environ | {
+        "OPENCODE_AGENT_TASK_ID": str(task_id),
+        "OPENCODE_ENGAGEMENT_ID": str(engagement_id),
+    }
     for index, host in enumerate(hosts):
         if index and index % 10 == 0:
             subprocess.run([str(pc_api), "task-heartbeat", str(task_id)], check=True, env=environment)
