@@ -754,7 +754,12 @@
     }
 
     function panic(ex) {
-        console.log(ex);
+        console.error(ex);
+        var reason = "Неизвестная ошибка"
+        if (ex) {
+            reason = ex.stack || ex.message || String(ex)
+        }
+        reason = String(reason).slice(0, 6000)
         var wide = get("wide")
         clear(wide)
         removeById("working")
@@ -771,13 +776,26 @@
             height: "100vh"
         })
         add(wide, main)
-        var message = div('header1', { text: translate('An error has occurred') });
-        var ok = createDefaultButton(translate('Ok'), backend.restartApp);
+        var message = div('header1', { text: 'Редактор остановлен из-за ошибки' });
+        var explanation = div({
+            text: 'Техническая причина ниже. Скопируйте её и отправьте разработчику.',
+            style: { marginTop: '12px', marginBottom: '8px', color: '#c7d5dd' }
+        });
+        var details = document.createElement('pre');
+        details.textContent = reason;
+        details.style.cssText = 'max-width:760px;max-height:42vh;overflow:auto;white-space:pre-wrap;text-align:left;padding:12px;background:#16232d;color:#f2d891;border:1px solid #4d7184;font:13px monospace';
+        var copy = createDefaultButton('Скопировать причину', function () {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(reason);
+            }
+        });
+        var ok = createDefaultButton('Перезагрузить редактор', function () { window.location.reload(); });
         var buttonDiv = div({
             'padding-top': '20px',
             'text-align': 'center'
-        }, ok);
-        var central = div('middle', message, buttonDiv);
+        }, copy, ok);
+        copy.style.marginRight = '10px';
+        var central = div('middle', message, explanation, details, buttonDiv);
         add(main, central);
     }    
 
