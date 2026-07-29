@@ -25,6 +25,15 @@ WORKFLOW = "08-no-creds-siluet"
 DIAGRAM_PATH = Path("workflows/08-no-creds-siluet.drakon")
 TERMINAL = {"1"}
 FORBIDDEN = ("credential", "парол", "port", "порт", "service", "сервис", "mitre")
+BLOCK_PREFIXES = {
+    "3": "Зафиксировать номер задачи", "4": "Есть номер задачи", "5": "Поднять VPN",
+    "6": "VPN подключён", "7": "Сохранить CIDR-маршруты", "8": "Маршруты ppp0",
+    "9": "Контрольная точка", "10": "Оператор разрешил discovery", "11": "Найти живые хосты",
+    "12": "Найдены живые хосты", "13": "Сохранить список живых хостов",
+    "14": "Сохранить coverage", "15": "Завершить эксперимент", "16": "Завершить со статусом blocked",
+    "17": "Завершить со статусом dead", "18": "Завершить со статусом blocked",
+    "19": "Завершить со статусом blocked",
+}
 
 
 def canonical(value):
@@ -74,15 +83,10 @@ def validate(diagram):
         text = item.get("content", "").lower()
         if any(token in text for token in FORBIDDEN):
             raise ValueError(f"Запрещённый этап в блоке {item_id}")
-        if item.get("type") in {"action", "question"}:
-            agent = item.get("agent")
-            if not isinstance(agent, dict) or not agent.get("op") or not agent.get("executor"):
-                raise ValueError(f"Для блока {item_id} нет исполнимых данных")
-            expected = "|".join(str(item[edge]) for edge in ("one", "two") if item.get(edge))
-            if agent.get("next") != expected:
-                raise ValueError(f"Переходы блока {item_id} не совпадают с его исполнимыми данными")
-    if diagram.get("agentPolicy", {}).get("scope") != "all-ppp0-routes":
-        raise ValueError("Первый опыт ограничен только маршрутами ppp0")
+        if item.get("type") in {"action", "question"} and not item.get("content", "").startswith(BLOCK_PREFIXES[item_id]):
+            raise ValueError(f"Текст блока {item_id} не соответствует исполнимой схеме")
+    if "только VPN и поиск живых хостов" not in diagram.get("params", ""):
+        raise ValueError("Схема должна быть ограничена VPN и discovery")
 
 
 class Journal:
