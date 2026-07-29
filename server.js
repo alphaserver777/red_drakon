@@ -115,11 +115,23 @@ async function syncWorkflowDraftFromTech(change) {
 }
 
 async function syncTechDiagram(diagram) {
+  let found = false;
   for (const [key, value] of Object.entries(techState)) {
     try {
       const candidate = JSON.parse(value);
-      if (candidate?.name === "08-no-creds-siluet") techState[key] = JSON.stringify(diagram);
+      if (candidate?.name === "08-no-creds-siluet") {
+        techState[key] = JSON.stringify(diagram);
+        found = true;
+      }
     } catch { /* не схема */ }
+  }
+  if (!found) {
+    const folderKey = "reglament-folders";
+    const folders = JSON.parse(techState[folderKey] || "{}");
+    const diagramKey = "reglament d09";
+    folders[diagramKey] = true;
+    techState[folderKey] = JSON.stringify(folders);
+    techState[diagramKey] = JSON.stringify({ ...diagram, parent: "reglament 1" });
   }
   await saveTechState();
 }
