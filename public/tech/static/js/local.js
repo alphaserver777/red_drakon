@@ -741,6 +741,11 @@
   }
 
   function prepareNeedles(needles) {
+    // Старые схемы и некоторые вызовы поиска не передают tokens.
+    // Пустой запрос должен давать пустой результат, а не останавливать редактор.
+    if (!Array.isArray(needles)) {
+      needles = [];
+    }
     return needles.map(prepareNeedle).filter((nee) => !!nee);
   }
 
