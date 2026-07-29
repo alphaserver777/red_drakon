@@ -2913,7 +2913,7 @@ function EditorCtrl(window, document, elementId, userId) {
     // схему можно через правую кнопку на созданной ветке.
     var teleport = {
       id: "tt_teleport",
-      image: "end.png",
+      image: "action.png",
       tooltip: "Телепорт в следующую схему",
       command: function () {
         showSockets("teleport");
@@ -3120,9 +3120,9 @@ function EditorCtrl(window, document, elementId, userId) {
     addToIconGroup("basic", [question, action]);
     addToIconGroup("basic", [tcase, select]);
     addToIconGroup("basic", [insertion, foreach]);
-    addToIconGroup("basic", [branch, teleport, silhouette]);
+    addToIconGroup("basic", [branch, silhouette]);
+    addToIconGroup("basic", [teleport, pause]);
     addToIconGroup("basic", [sinput, soutput]);
-    addToIconGroup("basic", [pause]);
     createIconGroup("free-basic");
     createIconGroup("free-ui");
     createIconGroup("free-ar");

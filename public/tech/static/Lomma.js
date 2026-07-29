@@ -3088,22 +3088,16 @@ function branchInsert(socket) {
 }
 
 function teleportInsert(socket) {
-    var branchId, edits, fields, items, newId, oldTargets, targetId
-    branchId = getSocketBranchId(socket)
-    edits = moveBranchIdsRight(branchId)
-    targetId = getBranchItemId(branchId)
-    fields = {
-        type : "branch",
-        branchId : branchId,
+    var edits, item, newId
+    edits = []
+    item = {
+        type : "action",
         text : "↗ Выбрать схему",
-        one : targetId,
+        one : socket.target,
         teleportPending : true
     }
-    newId = createItem(edits, fields)
-    items = module.storage.items
-    oldTargets = {}
-    oldTargets[targetId] = true
-    redirectBranch(items, oldTargets, newId, edits)
+    newId = createItem(edits, item)
+    redirectUpperItems(edits, socket.links, newId)
     return edits
 }
 
@@ -13556,7 +13550,7 @@ function showInsertionSockets(type) {
                     showInsert
                 )
             } else {
-                if (type === "branch" || type === "teleport") {
+                if (type === "branch") {
                     showAllBranchSockets(
                         "insert"
                     )
