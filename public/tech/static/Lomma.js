@@ -3091,7 +3091,7 @@ function teleportInsert(socket) {
     var edits, item, newId
     edits = []
     item = {
-        type : "action",
+        type : "insertion",
         text : "↗ Выбрать схему",
         one : socket.target,
         teleportPending : true
@@ -10470,9 +10470,8 @@ function setTeleport(node) {
         if (!target) return
         edits = []
         var fields = {teleport: target, teleportPending: null}
-        // Телепорт принадлежит выходной ветке, а не рабочему действию.
-        if (item.type == "branch" && window.drakonWorkflowName) {
-            fields.content = "→ " + window.drakonWorkflowName(target)
+        if ((item.type == "branch" || item.type == "insertion") && window.drakonWorkflowName) {
+            fields.text = "↗ " + window.drakonWorkflowName(target)
         }
         updateItem(edits, itemId, fields)
         editAndSave(edits)

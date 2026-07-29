@@ -2909,16 +2909,6 @@ function EditorCtrl(window, document, elementId, userId) {
         showSockets("branch");
       },
     };
-    // Телепорт — это выходная ветка силуэта. После вставки выбрать целевую
-    // схему можно через правую кнопку на созданной ветке.
-    var teleport = {
-      id: "tt_teleport",
-      image: "action.png",
-      tooltip: "Телепорт в следующую схему",
-      command: function () {
-        showSockets("teleport");
-      },
-    };
     var silhouette = {
       id: "tt_silhouette",
       image: "silhouette.png",
@@ -2949,7 +2939,7 @@ function EditorCtrl(window, document, elementId, userId) {
       tooltip: "BUT_INSERTION",
       shortcut: "N",
       command: function () {
-        showSockets("insertion");
+        showSockets("teleport");
       },
     };
     var par = {
@@ -3121,8 +3111,8 @@ function EditorCtrl(window, document, elementId, userId) {
     addToIconGroup("basic", [tcase, select]);
     addToIconGroup("basic", [insertion, foreach]);
     addToIconGroup("basic", [branch, silhouette]);
-    addToIconGroup("basic", [teleport, pause]);
     addToIconGroup("basic", [sinput, soutput]);
+    addToIconGroup("basic", [pause]);
     createIconGroup("free-basic");
     createIconGroup("free-ui");
     createIconGroup("free-ar");
