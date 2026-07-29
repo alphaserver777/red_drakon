@@ -79,7 +79,9 @@ async function syncTechDiagram(diagram) {
     try {
       const candidate = JSON.parse(value);
       if (candidate?.name === "08-no-creds-siluet") {
-        techState[key] = JSON.stringify(diagram);
+        // DRAKON Tech может при сохранении убрать parent. Без него схема
+        // остаётся в «Недавнее», но исчезает из дерева проекта.
+        techState[key] = JSON.stringify({ ...diagram, parent: "reglament 1" });
         found = true;
       }
     } catch { /* не схема */ }

@@ -7651,7 +7651,8 @@ function getFormatForIcon(type, itemId) {
 
 function getAutoNumber(itemId) {
     if (!module.visuals || !module.visuals.nodes) return null
-    var nodes = module.visuals.nodes.rows.filter(function(node) {
+    var rows = module.visuals.nodes.rows
+    var nodes = Object.keys(rows).map(function(key) { return rows[key] }).filter(function(node) {
         return node.itemId && (node.type === "action" || node.type === "question")
     })
     nodes.sort(function(left, right) {
