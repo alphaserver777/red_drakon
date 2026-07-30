@@ -3634,6 +3634,22 @@ function buildMenuByType(node) {
             null,
             function() {startEditText(node.id)}
         )
+        if (node.itemId) {
+            pushMenuItem(
+                menu,
+                "ВНЕШНЯЯ ССЫЛКА…",
+                null,
+                function() {startEditExternalLink(node.id)}
+            )
+            if (getExternalLink(node.itemId)) {
+                pushMenuItem(
+                    menu,
+                    "УДАЛИТЬ ВНЕШНЮЮ ССЫЛКУ",
+                    null,
+                    function() {clearExternalLink(node.id)}
+                )
+            }
+        }
         pushSeparator(menu)
     }
     if ((node.type == "insertion" || node.type == "branch") && window.drakonWorkflowChooseTarget) {
@@ -6630,7 +6646,12 @@ function findDraggable(x, y) {
     } else {
         node = findNode(x, y)
         if (node) {
-            if (inTextArea(node, x, y)) {
+            if (hitExternalLink(node, x, y)) {
+                return {
+                    type : Const.LINK,
+                    data : getExternalLink(node.itemId)
+                }
+            } else if (inTextArea(node, x, y)) {
                 return {
                     id : node.id,
                     type : Const.TEXT,
@@ -7775,11 +7796,46 @@ function getAutoNumber(itemId) {
     return index === -1 ? null : index + 1
 }
 
+function getExternalLink(itemId) {
+    var item
+    if (!module.storage || !module.storage.items) return null
+    item = module.storage.items[itemId]
+    if (item && typeof item.externalLink === "string" && /^https?:\/\/\S+$/i.test(item.externalLink)) {
+        return item.externalLink
+    }
+    return null
+}
+
+function externalLinkPosition(item) {
+    return {
+        x: item.x - item.w + 12,
+        y: item.y - item.h + 12
+    }
+}
+
+function hitExternalLink(node, x, y) {
+    var link, pos
+    link = getExternalLink(node.itemId)
+    if (!link) return false
+    pos = externalLinkPosition(node)
+    return x >= pos.x - 12 && x <= pos.x + 12 &&
+        y >= pos.y - 12 && y <= pos.y + 12
+}
+
+function drawExternalLink(render, texId, item) {
+    var link, pos
+    link = getExternalLink(item.itemId || item.id)
+    if (!link) return
+    pos = externalLinkPosition(item)
+    render.drawLinkIcon(texId, "link", pos.x, pos.y)
+}
+
 function drawAutoNumber(render, texId, item) {
     var number = getAutoNumber(item.itemId || item.id)
     if (!number) return
     // Номер — простая метка над левым верхним углом: без фигуры и без рамки.
     render.drawText(texId, String(number), item.x - item.w + 4, item.y - item.h - 3, "#dfead2")
+    drawExternalLink(render, texId, item)
 }
 
 function getIconCount(graph) {
@@ -14150,6 +14206,45 @@ function startEditText(nodeId) {
             cmOptions
         )
     }
+}
+
+function validateExternalLink(value) {
+    value = (value || "").trim()
+    if (!value || /^https?:\/\/\S+$/i.test(value)) {
+        return null
+    }
+    return "Укажите полный адрес, начинающийся с http:// или https://"
+}
+
+function setExternalLink(nodeId, value) {
+    var edits, node
+    if (module.readonly) return
+    node = getNode(nodeId)
+    value = (value || "").trim()
+    edits = []
+    updateItem(edits, node.itemId, {externalLink: value || null})
+    editAndSave(edits)
+}
+
+function clearExternalLink(nodeId) {
+    setExternalLink(nodeId, "")
+}
+
+function startEditExternalLink(nodeId) {
+    var node, old, x, y
+    node = getNode(nodeId)
+    old = getExternalLink(node.itemId) || ""
+    x = node.x - node.w - 5
+    y = node.y - node.h - 29
+    showInputBox(
+        "Внешняя ссылка",
+        old,
+        function(value) { setExternalLink(nodeId, value) },
+        x,
+        y,
+        validateExternalLink,
+        {}
+    )
 }
 
 function startEditTextAt(id, x, y) {
