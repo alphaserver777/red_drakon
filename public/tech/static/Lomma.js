@@ -6493,57 +6493,11 @@ function editAndSaveCore(edits, isUndo, keepSearch) {
         edits,
         isUndo
     )
-    if (!isUndo && normalizeItemIds()) {
-        buildVisualsForEdit()
-        redrawCanvas()
-        module.persistence.persist()
-    }
     if (keepSearch) {
         
     } else {
         rebuildSearchState()
     }
-}
-
-function normalizeItemIds() {
-    var items, all, map, normalized, changed
-    if (!module.storage || !module.storage.items) return false
-    items = module.storage.items
-    // Сначала идут иконки, которые оператор читает как шаги алгоритма.
-    // Остальные служебные элементы сохраняют целостность схемы, но получают
-    // номера после них и не выводятся на холст.
-    all = Object.keys(items).map(function(id) {
-        var item = items[id]
-        var semantic = item.type === "action" || item.type === "question" ||
-            item.type === "case" || item.type === "select" || item.type === "insertion"
-        return {oldId: String(id), item: item, semantic: semantic,
-            x: Number(item.x) || 0, y: Number(item.y) || 0}
-    })
-    all.sort(function(left, right) {
-        if (left.semantic !== right.semantic) return left.semantic ? -1 : 1
-        if (left.semantic && left.y !== right.y) return left.y - right.y
-        if (left.semantic && left.x !== right.x) return left.x - right.x
-        return Number(left.oldId) - Number(right.oldId)
-    })
-    map = {}
-    all.forEach(function(entry, index) { map[entry.oldId] = String(index + 1) })
-    changed = all.some(function(entry) { return entry.oldId !== map[entry.oldId] })
-    if (!changed) return false
-    normalized = {}
-    all.forEach(function(entry) {
-        var old = entry.oldId
-        var copy = Utils.copyObject(entry.item)
-        copy.id = map[old]
-        ;["one", "two", "side"].forEach(function(field) {
-            if (copy[field] && map[String(copy[field])]) copy[field] = map[String(copy[field])]
-        })
-        normalized[copy.id] = copy
-        module.persistence.remove(old)
-    })
-    all.forEach(function(entry) { module.persistence.add(normalized[map[entry.oldId]]) })
-    module.storage.items = normalized
-    module.storage.nextId = all.length + 1
-    return true
 }
 
 function editMethod(name, method) {
@@ -7751,25 +7705,39 @@ function getFormatForIcon(type, itemId) {
 }
 
 function getAutoNumber(itemId) {
-    var items, order
+    var items, order, seen
     if (!module.storage || !module.storage.items) return null
     items = module.storage.items
-    // Это номер для чтения схемы, а не внутренний ключ JSON. Он всегда
-    // пересчитывается по положению: сверху вниз, на одной высоте — слева
-    // направо. Варианты выбора и переходы также являются шагами алгоритма.
-    order = Object.keys(items).map(function(id) {
-        var item = items[id]
-        return { id: String(id), type: item.type, x: Number(item.x) || 0, y: Number(item.y) || 0 }
-    }).filter(function(item) {
-        return item.type === "action" || item.type === "question" ||
-            item.type === "case" || item.type === "select" || item.type === "insertion"
+    order = []
+    seen = {}
+    // Силуэт — не обычная плоскость: ветви физически находятся на разных
+    // высотах. Поэтому нумеруем по структуре DRAKON, а не по координатам.
+    // Ветка читается целиком, вопрос — сначала «Да» (one), затем «Нет» (two).
+    var visit = function(id, branchId) {
+        var item
+        if (!id || seen[id]) return
+        item = items[id]
+        if (!item) return
+        if (item.type === "branch") {
+            if (item.branchId !== branchId) return
+            visit(item.one, branchId)
+            return
+        }
+        seen[id] = true
+        if (item.type === "action" || item.type === "question") order.push(String(id))
+        if (item.type === "question") {
+            visit(item.one, branchId)
+            visit(item.two, branchId)
+        } else {
+            visit(item.one, branchId)
+        }
+    }
+    var branches = Object.keys(items).map(function(id) { return items[id] }).filter(function(item) {
+        return item.type === "branch" && typeof item.branchId === "number"
     })
-    order.sort(function(left, right) {
-        if (left.y !== right.y) return left.y - right.y
-        if (left.x !== right.x) return left.x - right.x
-        return Number(left.id) - Number(right.id)
-    })
-    var index = order.map(function(item) { return item.id }).indexOf(String(itemId))
+    branches.sort(function(left, right) { return left.branchId - right.branchId })
+    branches.forEach(function(branch) { visit(branch.one, branch.branchId) })
+    var index = order.indexOf(String(itemId))
     return index === -1 ? null : index + 1
 }
 
@@ -14134,9 +14102,8 @@ function startEditText(nodeId) {
             cmOptions.workflowEditor = true
             cmOptions.workflowQuestion = node.type == "question"
             cmOptions.workflow = (module.storage.items[node.itemId] || {}).workflow || {}
-            var visibleNumber = getAutoNumber(node.itemId)
             title = tr("MES_CHANGE_ITEM_TEXT") +
-             ": №" + (visibleNumber || "—")
+             ": " + node.itemId
             validate = validateItemText
         }
         showInputBox(
