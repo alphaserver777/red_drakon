@@ -7717,9 +7717,11 @@ function getFormatForIcon(type, itemId) {
 }
 
 function getAutoNumber(itemId) {
-    var items, order, numberedTypes
-    if (!module.storage || !module.storage.items) return null
+    var items, nodes, order, numberedTypes
+    if (!module.storage || !module.storage.items || !module.visuals) return null
     items = module.storage.items
+    nodes = module.visuals.nodes && module.visuals.nodes.rows
+    if (!nodes) return null
     // Нумеруется каждая рисуемая иконка схемы. Порядок чтения: сверху вниз,
     // а на одной высоте — слева направо. Внутренние ключи JSON не меняются:
     // они обеспечивают целостность связей и журнала выполнения.
@@ -7728,22 +7730,25 @@ function getAutoNumber(itemId) {
         insertion: true, loopbegin: true, loopend: true, pause: true,
         question: true, select: true, sinput: true, soutput: true
     }
-    order = Object.keys(items).map(function(id) { return items[id] }).filter(function(item) {
-        return item && numberedTypes[item.type] &&
-            typeof item.x === "number" && typeof item.y === "number"
+    // Координаты принадлежат визуальным узлам, а не JSON-описанию item.
+    // Поэтому используем node.itemId как ключ между представлением и схемой.
+    order = Object.keys(nodes).map(function(id) { return nodes[id] }).filter(function(node) {
+        var source = items[node.itemId]
+        return source && numberedTypes[source.type] &&
+            typeof node.x === "number" && typeof node.y === "number"
     })
     order.sort(function(left, right) {
         if (left.y !== right.y) return left.y - right.y
         if (left.x !== right.x) return left.x - right.x
-        return String(left.id).localeCompare(String(right.id), undefined, {numeric: true})
+        return String(left.itemId).localeCompare(String(right.itemId), undefined, {numeric: true})
     })
-    order = order.map(function(item) { return String(item.id) })
+    order = order.map(function(node) { return String(node.itemId) })
     var index = order.indexOf(String(itemId))
     return index === -1 ? null : index + 1
 }
 
 function drawAutoNumber(render, texId, item) {
-    var number = getAutoNumber(item.id)
+    var number = getAutoNumber(item.itemId || item.id)
     if (!number) return
     // Номер — простая метка над левым верхним углом: без фигуры и без рамки.
     render.drawText(texId, String(number), item.x - item.w + 4, item.y - item.h - 3, "#dfead2")
