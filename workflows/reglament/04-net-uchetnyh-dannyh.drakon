@@ -1,1 +1,866 @@
-{"type":"drakon","name":"04-нет-учётных-данных","params":"Этап 4. Подтвердить безопасные факты без учётных данных и передать их в API.","parent":"reglament f5000","items":{"1":{"type":"end"},"2":{"type":"branch","branchId":1,"one":"64","content":"Очередь кандидатов"},"3":{"type":"action","one":"4","content":"Получить живые хосты, сервисы и coverage из этапа 03"},"4":{"type":"action","one":"5","content":"Отобрать кандидаты по критериям (Домен контроллер, Windows Workstation, NAS, Принтер, Камера) и приоритетам на"},"5":{"type":"question","one":"6","two":"7","flag1":1,"content":"Есть кандидаты для проверок без учётных данных?"},"6":{"type":"action","one":"92","content":"Зафиксировать очередь и перейти к проверкам"},"7":{"type":"action","one":"84","content":"Зафиксировать empty: применимых кандидатов нет"},"10":{"type":"branch","branchId":3,"one":"11","content":"SMB и RPC"},"11":{"type":"action","one":"12","content":"Проверить SMB-ответ, ОС и домен без учётных данных"},"12":{"type":"action","one":"13","content":"Получить анонимные сведения SMB/RPC о домене и хосте"},"13":{"type":"action","one":"14","content":"Проверить анонимно доступные SMB-шары без чтения файлов"},"14":{"type":"question","one":"15","two":"16","flag1":1,"content":"Есть подтверждённый факт SMB или RPC?"},"15":{"type":"action","one":"20","content":"Сохранить факт SMB/RPC, технику MITRE и доказательство"},"16":{"type":"action","one":"20","content":"Сохранить coverage SMB/RPC: факта нет или проверка неприменима"},"20":{"type":"branch","branchId":4,"one":"21","content":"DNS, LDAP и Kerberos"},"21":{"type":"action","one":"22","content":"Получить DNS SRV и PTR-записи подтверждённых узлов"},"22":{"type":"action","one":"23","content":"Проверить разрешённую передачу зоны DNS"},"23":{"type":"action","one":"24","content":"Получить LDAP RootDSE без учётных данных"},"24":{"type":"action","one":"25","content":"Проверить анонимный LDAP base на подтверждённых LDAP-узлах"},"25":{"type":"question","one":"26","two":"27","flag1":1,"content":"Есть подтверждённый факт DNS, LDAP или Kerberos?"},"26":{"type":"action","one":"71","content":"Сохранить факт DNS/LDAP/Kerberos, технику MITRE и доказательство"},"27":{"type":"action","one":"71","content":"Сохранить coverage DNS/LDAP/Kerberos"},"30":{"type":"branch","branchId":6,"one":"126","content":"Удалённые службы: SSH, WinRM, RDP, SQL"},"34":{"type":"question","one":"35","two":"36","flag1":1,"content":"Есть подтверждённый факт службы?"},"35":{"type":"action","one":"40","content":"Сохранить факт службы, технику MITRE и доказательство"},"36":{"type":"action","one":"40","content":"Сохранить coverage SNMP, веб и удалённых служб"},"40":{"type":"branch","branchId":7,"one":"41","content":"NAS, NFS и iSCSI"},"41":{"type":"action","one":"42","content":"Проверить экспорт NFS и цели iSCSI без монтирования"},"42":{"type":"question","one":"43","two":"44","flag1":1,"content":"Есть подтверждённый факт NAS, NFS или iSCSI?"},"43":{"type":"action","one":"84","content":"Сохранить факт NAS/NFS/iSCSI, технику MITRE и доказательство"},"44":{"type":"action","one":"84","content":"Сохранить coverage NAS/NFS/iSCSI"},"50":{"type":"branch","branchId":9,"one":"51","content":"Фиксация и API"},"51":{"type":"action","one":"52","content":"Передать факты, coverage и доказательства через API"},"52":{"type":"insertion","one":"60","content":"↗ 05-api-и-завершение","teleport":"reglament p05"},"60":{"type":"branch","branchId":10,"one":"1","content":"Exit"},"61":{"type":"question","one":"3","two":"63","flag1":1,"content":"Есть данные по сети ?"},"63":{"type":"insertion","one":"64","teleportPending":null,"content":"↗ 03-живые-хосты","teleport":"reglament p03"},"64":{"type":"arrow-loop","one":"61"},"71":{"type":"branch","branchId":5,"one":"80","content":"Веб сервисы (80/443)"},"72":{"type":"question","one":"82","two":"60","flag1":1,"content":"Обнаружен открытый порт?"},"73":{"type":"action","one":"77","content":"Перейти на веб-панель"},"74":{"type":"case","one":"30","content":"Ничего из слева перечисленного"},"75":{"type":"case","one":"79","two":"83","content":"Камеры Hikvision"},"76":{"type":"case","one":"78","two":"75","content":"Принтер Kyocera"},"77":{"type":"select","one":"76","content":"Что отображается на веб-панели?"},"78":{"type":"action","one":"30","content":"https://github.com/ac3lives/kyocera-cve-2022-1026"},"79":{"type":"action","one":"30","content":"https://github.com/jorhelp/Ingram"},"80":{"type":"action","one":"72","two":"","content":"Получить сведения SNMP запросами"},"82":{"type":"action","one":"73","two":"","content":"Получить HTTP-заголовки, заголовок и версию веб-службы"},"83":{"one":"40","type":"case","two":"74","content":"NAS"},"84":{"type":"branch","branchId":8,"one":"117","content":"Открытые шары"},"85":{"type":"question","one":"121","two":"50","flag1":1,"content":"Есть открытые и доступные без знания логина и пароля Шары?"},"86":{"type":"action","one":"87","content":"Поиск в шарах любой важной информации: креды, бекапы, скрипты (всё, что поможет получить доступ)"},"87":{"type":"question","one":"91","two":"50","flag1":1,"content":"Есть информация?"},"88":{"type":"case","one":"50","content":"Ничего из левоперечисленного"},"89":{"type":"case","one":"50","two":"88","content":"Бекапы"},"90":{"type":"case","one":"129","two":"89","content":"Креды"},"91":{"type":"select","one":"90","content":"Какая информация есть?"},"92":{"type":"branch","branchId":2,"one":"100","content":"Быстрый доступ"},"97":{"type":"case","one":"112","content":"Database"},"98":{"type":"case","one":"105","two":"97","content":"⚠️ Zerologon CVE-2020-147"},"99":{"type":"case","one":"104","two":"98","content":"Eternal Blue MS17-010"},"100":{"type":"select","one":"99","content":"Проверить на уязвимости"},"102":{"type":"action","one":"108","content":"msf> exploit/windows/smb/ms17_010_eternalblue # SMBv1 only"},"103":{"type":"action","one":"102","content":"nxc smb $SUBNET -M ms17-010"},"104":{"type":"question","one":"103","two":"103","flag1":1,"content":"Есть Виндовс Хосты SMB v1 ?"},"105":{"type":"question","one":"106","two":"10","flag1":1,"content":"Есть домен контроллер?"},"106":{"type":"action","one":"107","content":"zerologon-scan $dc_netbios_name $ip"},"107":{"type":"action","one":"110","content":"cve-2020-1472-exploit.py $MACHINE_BIOS_NAME $ip"},"108":{"type":"question","one":"109","two":"10","flag1":1,"content":"Доступ получен?"},"109":{"type":"action","one":"10","content":"Контрольная точка: остановиться и доложить оператору"},"110":{"type":"question","one":"111","two":"10","flag1":1,"content":"Доступ получен?"},"111":{"type":"action","one":"10","two":"","content":"Контрольная точка: остановиться и доложить оператору"},"112":{"type":"question","one":"113","two":"10","flag1":1,"content":"Есть SQL сервер?"},"113":{"type":"action","one":"114","content":"msf> use auxiliary/admin/mssql/mssql_enum_sql_logins"},"114":{"type":"question","one":"115","two":"10","flag1":1,"content":"Доступ получен?"},"115":{"type":"action","one":"10","two":"","content":"Контрольная точка: остановиться и доложить оператору"},"117":{"type":"action","one":"85","content":"Поиск SMB ресурсов\nhttps://spy-soft.net/enumerating-smb/"},"118":{"type":"case","one":"86","content":"https://spy-soft.net/crackmapexec-smb-password/"},"119":{"type":"case","one":"128","two":"118","content":"https://spy-soft.net/manspider-search-files-smb/"},"120":{"type":"case","one":"86","two":"119","content":"https://spy-soft.net/connect-shares-smbclient-kali-linux/"},"121":{"type":"select","one":"120","content":"Выбор способа работы с SMB"},"123":{"type":"case","one":"34","content":"SQL"},"124":{"type":"case","one":"34","two":"123","content":"RDP"},"125":{"type":"case","one":"127","two":"124","content":"SSH"},"126":{"type":"select","one":"125","content":"Обнаружение служб"},"127":{"type":"action","one":"34","content":"https://spy-soft.net/enumerate-ssh/"},"128":{"type":"action","one":"86","content":"https://github.com/blacklanternsecurity/manspider"},"129":{"type":"action","one":"50","two":"","content":"Контрольная точка: остановиться и доложить оператору"}}}
+{
+  "type": "drakon",
+  "name": "04-нет-учётных-данных",
+  "params": "Этап 4. Подтвердить безопасные факты без учётных данных и передать их в API.",
+  "parent": "reglament f5000",
+  "items": {
+    "1": {
+      "type": "end"
+    },
+    "2": {
+      "type": "branch",
+      "branchId": 1,
+      "one": "64",
+      "content": "Очередь кандидатов"
+    },
+    "3": {
+      "type": "action",
+      "one": "4",
+      "content": "Получить живые хосты, сервисы и coverage из этапа 03",
+      "workflow": {
+        "handler": "load-stage03",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "4": {
+      "type": "action",
+      "one": "5",
+      "content": "Отобрать кандидаты по критериям (Домен контроллер, Windows Workstation, NAS, Принтер, Камера) и приоритетам на",
+      "workflow": {
+        "handler": "select-candidates",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "5": {
+      "type": "question",
+      "one": "6",
+      "two": "7",
+      "flag1": 1,
+      "content": "Есть кандидаты для проверок без учётных данных?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_5",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "6": {
+      "type": "action",
+      "one": "92",
+      "content": "Зафиксировать очередь и перейти к проверкам",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "7": {
+      "type": "action",
+      "one": "84",
+      "content": "Зафиксировать empty: применимых кандидатов нет",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "10": {
+      "type": "branch",
+      "branchId": 3,
+      "one": "11",
+      "content": "SMB и RPC"
+    },
+    "11": {
+      "type": "action",
+      "one": "12",
+      "content": "Проверить SMB-ответ, ОС и домен без учётных данных",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          4228
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "12": {
+      "type": "action",
+      "one": "13",
+      "content": "Получить анонимные сведения SMB/RPC о домене и хосте",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3837,
+          3969
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "13": {
+      "type": "action",
+      "one": "14",
+      "content": "Проверить анонимно доступные SMB-шары без чтения файлов",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3971,
+          3970
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "14": {
+      "type": "question",
+      "one": "15",
+      "two": "16",
+      "flag1": 1,
+      "content": "Есть подтверждённый факт SMB или RPC?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_14",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "15": {
+      "type": "action",
+      "one": "20",
+      "content": "Сохранить факт SMB/RPC, технику MITRE и доказательство",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "16": {
+      "type": "action",
+      "one": "20",
+      "content": "Сохранить coverage SMB/RPC: факта нет или проверка неприменима",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "20": {
+      "type": "branch",
+      "branchId": 4,
+      "one": "21",
+      "content": "DNS, LDAP и Kerberos"
+    },
+    "21": {
+      "type": "action",
+      "one": "22",
+      "content": "Получить DNS SRV и PTR-записи подтверждённых узлов",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3980,
+          3979
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "22": {
+      "type": "action",
+      "one": "23",
+      "content": "Проверить разрешённую передачу зоны DNS",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3273
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "23": {
+      "type": "action",
+      "one": "24",
+      "content": "Получить LDAP RootDSE без учётных данных",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          4220
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "24": {
+      "type": "action",
+      "one": "25",
+      "content": "Проверить анонимный LDAP base на подтверждённых LDAP-узлах",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3280
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "25": {
+      "type": "question",
+      "one": "26",
+      "two": "27",
+      "flag1": 1,
+      "content": "Есть подтверждённый факт DNS, LDAP или Kerberos?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_25",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "26": {
+      "type": "action",
+      "one": "71",
+      "content": "Сохранить факт DNS/LDAP/Kerberos, технику MITRE и доказательство",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "27": {
+      "type": "action",
+      "one": "71",
+      "content": "Сохранить coverage DNS/LDAP/Kerberos",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "30": {
+      "type": "branch",
+      "branchId": 6,
+      "one": "126",
+      "content": "Удалённые службы: SSH, WinRM, RDP, SQL"
+    },
+    "34": {
+      "type": "question",
+      "one": "35",
+      "two": "36",
+      "flag1": 1,
+      "content": "Есть подтверждённый факт службы?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_34",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "35": {
+      "type": "action",
+      "one": "40",
+      "content": "Сохранить факт службы, технику MITRE и доказательство",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "36": {
+      "type": "action",
+      "one": "40",
+      "content": "Сохранить coverage SNMP, веб и удалённых служб",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "40": {
+      "type": "branch",
+      "branchId": 7,
+      "one": "41",
+      "content": "NAS, NFS и iSCSI"
+    },
+    "41": {
+      "type": "action",
+      "one": "42",
+      "content": "Проверить экспорт NFS и цели iSCSI без монтирования",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3747,
+          3749
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "42": {
+      "type": "question",
+      "one": "43",
+      "two": "44",
+      "flag1": 1,
+      "content": "Есть подтверждённый факт NAS, NFS или iSCSI?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_42",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "43": {
+      "type": "action",
+      "one": "84",
+      "content": "Сохранить факт NAS/NFS/iSCSI, технику MITRE и доказательство",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "44": {
+      "type": "action",
+      "one": "84",
+      "content": "Сохранить coverage NAS/NFS/iSCSI",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "50": {
+      "type": "branch",
+      "branchId": 9,
+      "one": "51",
+      "content": "Фиксация и API"
+    },
+    "51": {
+      "type": "action",
+      "one": "52",
+      "content": "Передать факты, coverage и доказательства через API",
+      "workflow": {
+        "handler": "record-api",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "52": {
+      "type": "insertion",
+      "one": "60",
+      "content": "↗ 05-api-и-завершение",
+      "teleport": "reglament p05"
+    },
+    "60": {
+      "type": "branch",
+      "branchId": 10,
+      "one": "1",
+      "content": "Exit"
+    },
+    "61": {
+      "type": "question",
+      "one": "3",
+      "two": "63",
+      "flag1": 1,
+      "content": "Есть данные по сети ?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_61",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "63": {
+      "type": "insertion",
+      "one": "64",
+      "teleportPending": null,
+      "content": "↗ 03-живые-хосты",
+      "teleport": "reglament p03"
+    },
+    "64": {
+      "type": "arrow-loop",
+      "one": "61"
+    },
+    "71": {
+      "type": "branch",
+      "branchId": 5,
+      "one": "80",
+      "content": "Веб сервисы (80/443)"
+    },
+    "72": {
+      "type": "question",
+      "one": "82",
+      "two": "60",
+      "flag1": 1,
+      "content": "Обнаружен открытый порт?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_72",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "73": {
+      "type": "action",
+      "one": "77",
+      "content": "Перейти на веб-панель",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "74": {
+      "type": "case",
+      "one": "30",
+      "content": "Ничего из слева перечисленного"
+    },
+    "75": {
+      "type": "case",
+      "one": "79",
+      "two": "83",
+      "content": "Камеры Hikvision"
+    },
+    "76": {
+      "type": "case",
+      "one": "78",
+      "two": "75",
+      "content": "Принтер Kyocera"
+    },
+    "77": {
+      "type": "select",
+      "one": "76",
+      "content": "Что отображается на веб-панели?"
+    },
+    "78": {
+      "type": "action",
+      "one": "30",
+      "content": "https://github.com/ac3lives/kyocera-cve-2022-1026",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "79": {
+      "type": "action",
+      "one": "30",
+      "content": "https://github.com/jorhelp/Ingram",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "80": {
+      "type": "action",
+      "one": "72",
+      "two": "",
+      "content": "Получить сведения SNMP запросами",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3984
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "82": {
+      "type": "action",
+      "one": "73",
+      "two": "",
+      "content": "Получить HTTP-заголовки, заголовок и версию веб-службы",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3991
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "83": {
+      "one": "40",
+      "type": "case",
+      "two": "74",
+      "content": "NAS"
+    },
+    "84": {
+      "type": "branch",
+      "branchId": 8,
+      "one": "117",
+      "content": "Открытые шары"
+    },
+    "85": {
+      "type": "question",
+      "one": "121",
+      "two": "50",
+      "flag1": 1,
+      "content": "Есть открытые и доступные без знания логина и пароля Шары?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_85",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "86": {
+      "type": "action",
+      "one": "87",
+      "content": "Поиск в шарах любой важной информации: креды, бекапы, скрипты (всё, что поможет получить доступ)",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "87": {
+      "type": "question",
+      "one": "91",
+      "two": "50",
+      "flag1": 1,
+      "content": "Есть информация?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_87",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "88": {
+      "type": "case",
+      "one": "50",
+      "content": "Ничего из левоперечисленного"
+    },
+    "89": {
+      "type": "case",
+      "one": "50",
+      "two": "88",
+      "content": "Бекапы"
+    },
+    "90": {
+      "type": "case",
+      "one": "129",
+      "two": "89",
+      "content": "Креды"
+    },
+    "91": {
+      "type": "select",
+      "one": "90",
+      "content": "Какая информация есть?"
+    },
+    "92": {
+      "type": "branch",
+      "branchId": 2,
+      "one": "100",
+      "content": "Быстрый доступ"
+    },
+    "97": {
+      "type": "case",
+      "one": "112",
+      "content": "Database"
+    },
+    "98": {
+      "type": "case",
+      "one": "105",
+      "two": "97",
+      "content": "⚠️ Zerologon CVE-2020-147"
+    },
+    "99": {
+      "type": "case",
+      "one": "104",
+      "two": "98",
+      "content": "Eternal Blue MS17-010"
+    },
+    "100": {
+      "type": "select",
+      "one": "99",
+      "content": "Проверить на уязвимости"
+    },
+    "102": {
+      "type": "action",
+      "one": "108",
+      "content": "msf> exploit/windows/smb/ms17_010_eternalblue # SMBv1 only",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "103": {
+      "type": "action",
+      "one": "102",
+      "content": "nxc smb $SUBNET -M ms17-010",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3559
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "104": {
+      "type": "question",
+      "one": "103",
+      "two": "103",
+      "flag1": 1,
+      "content": "Есть Виндовс Хосты SMB v1 ?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_104",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "105": {
+      "type": "question",
+      "one": "106",
+      "two": "10",
+      "flag1": 1,
+      "content": "Есть домен контроллер?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_105",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "106": {
+      "type": "action",
+      "one": "107",
+      "content": "zerologon-scan $dc_netbios_name $ip",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3555
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "107": {
+      "type": "action",
+      "one": "110",
+      "content": "cve-2020-1472-exploit.py $MACHINE_BIOS_NAME $ip",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "108": {
+      "type": "question",
+      "one": "109",
+      "two": "10",
+      "flag1": 1,
+      "content": "Доступ получен?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_108",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "109": {
+      "type": "action",
+      "one": "10",
+      "content": "Контрольная точка: остановиться и доложить оператору",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "110": {
+      "type": "question",
+      "one": "111",
+      "two": "10",
+      "flag1": 1,
+      "content": "Доступ получен?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_110",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "111": {
+      "type": "action",
+      "one": "10",
+      "two": "",
+      "content": "Контрольная точка: остановиться и доложить оператору",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "112": {
+      "type": "question",
+      "one": "113",
+      "two": "10",
+      "flag1": 1,
+      "content": "Есть SQL сервер?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_112",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "113": {
+      "type": "action",
+      "one": "114",
+      "content": "msf> use auxiliary/admin/mssql/mssql_enum_sql_logins",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3803
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "114": {
+      "type": "question",
+      "one": "115",
+      "two": "10",
+      "flag1": 1,
+      "content": "Доступ получен?",
+      "workflow": {
+        "handler": "decision",
+        "decision": "block_114",
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "115": {
+      "type": "action",
+      "one": "10",
+      "two": "",
+      "content": "Контрольная точка: остановиться и доложить оператору",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "117": {
+      "type": "action",
+      "one": "85",
+      "content": "Поиск SMB ресурсов\nhttps://spy-soft.net/enumerating-smb/",
+      "workflow": {
+        "handler": "mitre-command",
+        "commandIds": [
+          3970,
+          3971
+        ],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "118": {
+      "type": "case",
+      "one": "86",
+      "content": "https://spy-soft.net/crackmapexec-smb-password/"
+    },
+    "119": {
+      "type": "case",
+      "one": "128",
+      "two": "118",
+      "content": "https://spy-soft.net/manspider-search-files-smb/"
+    },
+    "120": {
+      "type": "case",
+      "one": "86",
+      "two": "119",
+      "content": "https://spy-soft.net/connect-shares-smbclient-kali-linux/"
+    },
+    "121": {
+      "type": "select",
+      "one": "120",
+      "content": "Выбор способа работы с SMB"
+    },
+    "123": {
+      "type": "case",
+      "one": "34",
+      "content": "SQL"
+    },
+    "124": {
+      "type": "case",
+      "one": "34",
+      "two": "123",
+      "content": "RDP"
+    },
+    "125": {
+      "type": "case",
+      "one": "127",
+      "two": "124",
+      "content": "SSH"
+    },
+    "126": {
+      "type": "select",
+      "one": "125",
+      "content": "Обнаружение служб"
+    },
+    "127": {
+      "type": "action",
+      "one": "34",
+      "content": "https://spy-soft.net/enumerate-ssh/",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "128": {
+      "type": "action",
+      "one": "86",
+      "content": "https://github.com/blacklanternsecurity/manspider",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    },
+    "129": {
+      "type": "action",
+      "one": "50",
+      "two": "",
+      "content": "Контрольная точка: остановиться и доложить оператору",
+      "workflow": {
+        "handler": "operator-approval",
+        "commandIds": [],
+        "inputs": [],
+        "outputs": []
+      }
+    }
+  }
+}
