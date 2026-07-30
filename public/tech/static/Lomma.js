@@ -7717,19 +7717,42 @@ function getFormatForIcon(type, itemId) {
 }
 
 function getAutoNumber(itemId) {
-    var items, nodes, order, numberedTypes
+    var branchItems, groups, items, nodes, order, numberedTypes
     if (!module.storage || !module.storage.items || !module.visuals) return null
     items = module.storage.items
     nodes = module.visuals.nodes && module.visuals.nodes.rows
     if (!nodes) return null
-    // Нумеруется каждая рисуемая иконка схемы. Порядок чтения: сверху вниз,
-    // а на одной высоте — слева направо. Внутренние ключи JSON не меняются:
-    // они обеспечивают целостность связей и журнала выполнения.
+    // Нумеруется каждая рисуемая иконка схемы. Сначала идёт вся лиана
+    // слева, затем следующая справа; внутри лианы — сверху вниз, а на одной
+    // высоте слева направо. Внутренние ключи JSON не меняются: они
+    // обеспечивают целостность связей и журнала выполнения.
     numberedTypes = {
         action: true, address: true, branch: true, case: true, input: true,
         insertion: true, loopbegin: true, loopend: true, pause: true,
         question: true, select: true, sinput: true, soutput: true
     }
+    branchItems = Object.keys(items).filter(function(id) {
+        return items[id].type === "branch" &&
+            typeof items[id].branchId === "number"
+    })
+    branchItems.sort(function(left, right) {
+        return items[left].branchId - items[right].branchId
+    })
+    groups = {}
+    var assignToBranch = function(id, branchId) {
+        var source
+        if (!id || groups[id] !== undefined) return
+        source = items[id]
+        if (!source) return
+        // Чужая ветка — начало следующей лианы, она будет обработана отдельно.
+        if (source.type === "branch" && source.branchId !== branchId) return
+        groups[id] = branchId
+        assignToBranch(source.one, branchId)
+        assignToBranch(source.two, branchId)
+    }
+    branchItems.forEach(function(id) {
+        assignToBranch(id, items[id].branchId)
+    })
     // Координаты принадлежат визуальным узлам, а не JSON-описанию item.
     // Поэтому используем node.itemId как ключ между представлением и схемой.
     order = Object.keys(nodes).map(function(id) { return nodes[id] }).filter(function(node) {
@@ -7738,6 +7761,11 @@ function getAutoNumber(itemId) {
             typeof node.x === "number" && typeof node.y === "number"
     })
     order.sort(function(left, right) {
+        var leftGroup = groups[left.itemId]
+        var rightGroup = groups[right.itemId]
+        if (leftGroup === undefined) leftGroup = 1000000
+        if (rightGroup === undefined) rightGroup = 1000000
+        if (leftGroup !== rightGroup) return leftGroup - rightGroup
         if (left.y !== right.y) return left.y - right.y
         if (left.x !== right.x) return left.x - right.x
         return String(left.itemId).localeCompare(String(right.itemId), undefined, {numeric: true})
