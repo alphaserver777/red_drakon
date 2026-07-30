@@ -103,6 +103,7 @@ function Address_draw(render, item) {
             format
         )
         drawCenterTextInRect(render, texId, item.tb, item)
+        drawAutoNumber(render, texId, item)
         return
     }
     format = getFormatForIcon(
@@ -171,6 +172,7 @@ function Address_draw(render, item) {
         item.tb,
         pos
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function Branch_draw(render, item) {
@@ -241,6 +243,7 @@ function Branch_draw(render, item) {
         item.tb,
         pos
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function Branch_flow(render, item) {
@@ -302,6 +305,7 @@ function Case_draw(render, item) {
         item.tb,
         pos
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function Case_flow(render, item) {
@@ -673,6 +677,7 @@ function Input_draw(render, item) {
         item.tb,
         pos
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function Input_flow(render, item) {
@@ -776,6 +781,7 @@ function Insertion_draw(render, item) {
         item.tb,
         pos
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function Insertion_flow(render, item) {
@@ -829,6 +835,7 @@ function LoopBegin_draw(render, item) {
         item.tb,
         item
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function LoopBegin_flow(render, item) {
@@ -868,6 +875,7 @@ function LoopEnd_draw(render, item) {
         item.tb,
         item
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function MTable(name, keys) {
@@ -1445,6 +1453,7 @@ function Pause_draw(render, item) {
         item.tb,
         item
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function Pause_flow(render, item) {
@@ -1566,6 +1575,7 @@ function SInput_draw(render, item) {
         item.tb,
         pos
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function SOutput_draw(render, item) {
@@ -1601,6 +1611,7 @@ function SOutput_draw(render, item) {
         item.tb,
         pos
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function Select_draw(render, item) {
@@ -1640,6 +1651,7 @@ function Select_draw(render, item) {
         item.tb,
         pos
     )
+    drawAutoNumber(render, texId, item)
 }
 
 function Select_flow(render, item) {
@@ -7705,38 +7717,27 @@ function getFormatForIcon(type, itemId) {
 }
 
 function getAutoNumber(itemId) {
-    var items, order, seen
+    var items, order, numberedTypes
     if (!module.storage || !module.storage.items) return null
     items = module.storage.items
-    order = []
-    seen = {}
-    // Силуэт — не обычная плоскость: ветви физически находятся на разных
-    // высотах. Поэтому нумеруем по структуре DRAKON, а не по координатам.
-    // Ветка читается целиком, вопрос — сначала «Да» (one), затем «Нет» (two).
-    var visit = function(id, branchId) {
-        var item
-        if (!id || seen[id]) return
-        item = items[id]
-        if (!item) return
-        if (item.type === "branch") {
-            if (item.branchId !== branchId) return
-            visit(item.one, branchId)
-            return
-        }
-        seen[id] = true
-        if (item.type === "action" || item.type === "question") order.push(String(id))
-        if (item.type === "question") {
-            visit(item.one, branchId)
-            visit(item.two, branchId)
-        } else {
-            visit(item.one, branchId)
-        }
+    // Нумеруется каждая рисуемая иконка схемы. Порядок чтения: сверху вниз,
+    // а на одной высоте — слева направо. Внутренние ключи JSON не меняются:
+    // они обеспечивают целостность связей и журнала выполнения.
+    numberedTypes = {
+        action: true, address: true, branch: true, case: true, input: true,
+        insertion: true, loopbegin: true, loopend: true, pause: true,
+        question: true, select: true, sinput: true, soutput: true
     }
-    var branches = Object.keys(items).map(function(id) { return items[id] }).filter(function(item) {
-        return item.type === "branch" && typeof item.branchId === "number"
+    order = Object.keys(items).map(function(id) { return items[id] }).filter(function(item) {
+        return item && numberedTypes[item.type] &&
+            typeof item.x === "number" && typeof item.y === "number"
     })
-    branches.sort(function(left, right) { return left.branchId - right.branchId })
-    branches.forEach(function(branch) { visit(branch.one, branch.branchId) })
+    order.sort(function(left, right) {
+        if (left.y !== right.y) return left.y - right.y
+        if (left.x !== right.x) return left.x - right.x
+        return String(left.id).localeCompare(String(right.id), undefined, {numeric: true})
+    })
+    order = order.map(function(item) { return String(item.id) })
     var index = order.indexOf(String(itemId))
     return index === -1 ? null : index + 1
 }
@@ -14103,7 +14104,7 @@ function startEditText(nodeId) {
             cmOptions.workflowQuestion = node.type == "question"
             cmOptions.workflow = (module.storage.items[node.itemId] || {}).workflow || {}
             title = tr("MES_CHANGE_ITEM_TEXT") +
-             ": " + node.itemId
+            ": №" + (getAutoNumber(node.itemId) || "—")
             validate = validateItemText
         }
         showInputBox(
