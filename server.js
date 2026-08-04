@@ -139,6 +139,40 @@ async function workflowRuns(requestUrl) {
   return await response.text();
 }
 
+
+function exportReglamentP04() {
+  const raw = techState["reglament p04"];
+  if (typeof raw !== "string") throw Object.assign(new Error("Схема reglament p04 не найдена"), { code: "ENOENT" });
+  const diagram = JSON.parse(raw);
+  const items = diagram.items && typeof diagram.items === "object" ? diagram.items : {};
+  const errors = [], roles = {}, methods = [];
+  for (const item of Object.values(items)) {
+    const workflow = item.workflow && typeof item.workflow === "object" ? item.workflow : {};
+    if (workflow.role) roles[workflow.role] = { item, workflow };
+    const command = typeof workflow.command === "string" ? workflow.command.trim() : item.type === "shelf" && typeof item.text2 === "string" ? item.text2.trim() : "";
+    if (!command) continue;
+    const sourceId = typeof workflow.blockId === "string" ? workflow.blockId.trim() : "";
+    if (!/^reglament\.p04\.[a-z][a-z0-9.-]{2,90}$/.test(sourceId)) {
+      errors.push("У команды нет корректного идентификатора блока: " + String(item.content || item.text || "действие").slice(0, 120));
+      continue;
+    }
+    methods.push({ id: "method." + sourceId.slice("reglament.p04.".length), title: String(item.content || item.text || "Действие").trim(), blockId: "reglament.p04.coverage", command, requires: Array.isArray(workflow.inputs) ? workflow.inputs : [], parameters: Array.isArray(workflow.outputs) ? workflow.outputs : [], executor: "local", commandIds: (workflow.commandIds || []).map(Number).filter(Number.isInteger) });
+  }
+  for (const role of ["entry", "load-network-data", "classify-candidates", "candidates-decision"]) {
+    if (!roles[role]?.workflow?.blockId) errors.push("Не назначена роль p04: " + role);
+  }
+  if (!methods.length) errors.push("В p04 нет действий с командами.");
+  if (errors.length) return { errors };
+  const block = (role, kind, transitions, decisionMode) => ({ id: roles[role].workflow.blockId, kind, title: String(roles[role].item.content || roles[role].item.text || role).trim(), transitions, ...(decisionMode ? { decisionMode } : {}) });
+  const terminal = "reglament.p04.end";
+  const entry = block("entry", "decision", { yes: roles["load-network-data"].workflow.blockId, no: terminal }, "approval");
+  const load = block("load-network-data", "action", { next: roles["classify-candidates"].workflow.blockId });
+  const classify = block("classify-candidates", "action", { next: roles["candidates-decision"].workflow.blockId });
+  const candidates = block("candidates-decision", "decision", { yes: "reglament.p04.coverage", no: terminal }, "approval");
+  const coverage = { id: "reglament.p04.coverage", kind: "action", title: "Веер применимых проверок без учётных данных", transitions: { empty: terminal }, methods, decisionMode: "rule" };
+  return { contract: { workflow: "reglament.p04", version: 1, startBlockId: entry.id, blocks: [entry, load, classify, candidates, coverage, { id: terminal, kind: "terminal", title: "Завершение p04", transitions: {} }], forbidden: ["network.scan_outside_scope"] } };
+}
+
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://localhost");
@@ -146,6 +180,10 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && route === "/api/state") return reply(response, 200, JSON.stringify(state));
     if (request.method === "GET" && route === "/api/tech-state") return reply(response, 200, JSON.stringify(techState));
     if (request.method === "GET" && route === "/api/workflow-runs") return reply(response, 200, await workflowRuns(url));
+    if (request.method === "GET" && route === "/api/export/reglament-p04") {
+      const exported = exportReglamentP04();
+      return exported.errors ? reply(response, 422, JSON.stringify(exported)) : reply(response, 200, JSON.stringify(exported.contract));
+    }
     if (request.method === "POST" && route === "/api/storage") {
       const change = await readBody(request);
       await applyChange(state, change, saveState);
